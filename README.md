@@ -15,7 +15,7 @@ Fourgate catches it before that happens.
 ## Quickstart
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/hifzabuildsai/fourgate.git
 cd fourgate
 pip install -r requirements.txt
 
