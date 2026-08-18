@@ -1,4 +1,3 @@
-"""The same server, with the stdout bug fixed: log to stderr, not stdout."""
 import sys
 from mcp.server.fastmcp import FastMCP
 
@@ -8,7 +7,7 @@ mcp = FastMCP("clean-demo-server")
 @mcp.tool()
 def add_numbers(a: int, b: int) -> int:
     """Add two numbers together."""
-    print(f"DEBUG: adding {a} + {b}", file=sys.stderr)  # fixed: stderr, not stdout
+    print(f"DEBUG: adding {a} + {b}", file=sys.stderr)
     return a + b
 
 
