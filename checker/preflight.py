@@ -13,17 +13,25 @@ the official client SDK), so it can catch and report the exact failure modes:
             open (crash / hang / silently-coerced bad data).
 
 Results print locally AND (unless --no-upload is passed) get pushed to a
-shared Supabase table, so every run — yours or a student's — lands in the
+shared Supabase table, so every run -- yours or a student's -- lands in the
 same place instead of staying stuck on one laptop.
+
+Cross-platform note: line reading uses a background thread + queue rather
+than the `selectors` module. `selectors`' default backend wraps
+`select.select()`, which on Windows only supports real sockets -- not pipes
+from subprocess.PIPE -- and crashes with WinError 10038. Thread+queue works
+identically on Windows, macOS, and Linux.
 
 Usage:
     python3 preflight.py <path-to-server-script> [--json] [--no-upload] [--checked-by "name"]
 """
 
 import json
+import os
 import subprocess
 import sys
-import selectors
+import threading
+import queue
 import time
 import textwrap
 import argparse
@@ -33,11 +41,6 @@ import urllib.error
 
 TIMEOUT_SECS = 5
 
-# Public, insert-only Supabase project for the Fourgate v0 shared eval log.
-# The key below is a publishable/anon key restricted by RLS to insert+select
-# only (no update, no delete) -- safe to ship in this open-source script.
-# Override with env vars if you want your own project instead.
-import os
 SUPABASE_URL = os.environ.get("FOURGATE_SUPABASE_URL", "https://qkuvvlzeqosvfcherlyp.supabase.co")
 SUPABASE_KEY = os.environ.get(
     "FOURGATE_SUPABASE_KEY",
@@ -58,21 +61,37 @@ class Fourgate:
     def __init__(self, server_path: str):
         self.server_path = server_path
         self.proc = None
-        self.sel = selectors.DefaultSelector()
         self._id = 0
         self.findings = []
+        self._line_queue = queue.Queue()
+        self._reader_thread = None
 
     def _next_id(self):
         self._id += 1
         return self._id
 
+    def _reader_loop(self):
+        """Background thread: pushes each stdout line onto the queue as it
+        arrives, and a single None once the pipe closes (EOF)."""
+        try:
+            for line in iter(self.proc.stdout.readline, ""):
+                self._line_queue.put(line.rstrip("\n"))
+        except Exception:
+            pass
+        finally:
+            self._line_queue.put(None)
+
     def start(self):
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"  # force the child to flush stdout immediately,
+                                        # regardless of platform buffering defaults
         self.proc = subprocess.Popen(
             [sys.executable, self.server_path],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1,
+            text=True, bufsize=1, env=env,
         )
-        self.sel.register(self.proc.stdout, selectors.EVENT_READ, "stdout")
+        self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
+        self._reader_thread.start()
 
     def stop(self):
         if self.proc and self.proc.poll() is None:
@@ -93,11 +112,10 @@ class Fourgate:
         return msg.get("id")
 
     def _read_raw_line(self, timeout=TIMEOUT_SECS):
-        events = self.sel.select(timeout=timeout)
-        if not events:
+        try:
+            return self._line_queue.get(timeout=timeout)  # may be None on EOF
+        except queue.Empty:
             return None
-        line = self.proc.stdout.readline()
-        return None if line == "" else line.rstrip("\n")
 
     def _read_json_message(self, expect_id=None, timeout=TIMEOUT_SECS):
         deadline = time.time() + timeout
@@ -270,8 +288,6 @@ def summarize(findings):
 
 
 def upload_to_supabase(server_path, findings, checked_by):
-    """Push this run + its findings to the shared Supabase log. Never raises --
-    a failed upload should never break the local report."""
     passes, fails, warns, result = summarize(findings)
     try:
         run_payload = json.dumps({
@@ -342,7 +358,7 @@ def print_report(server_path, findings, uploaded, upload_error):
     print("-" * 60)
     print(f"  {len(passes)} passed, {len(fails)} failed, {len(warns)} warnings")
     if uploaded:
-        print(c("INFO" if color else "", "  ↑ synced to shared log"))
+        print(c("INFO", "  ↑ synced to shared log") if color else "  synced to shared log")
     elif upload_error is not None:
         print(f"  (not synced: {upload_error})")
     print()
