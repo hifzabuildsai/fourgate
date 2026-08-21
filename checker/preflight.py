@@ -22,6 +22,9 @@ than the `selectors` module. `selectors`' default backend wraps
 from subprocess.PIPE -- and crashes with WinError 10038. Thread+queue works
 identically on Windows, macOS, and Linux.
 
+stderr is drained continuously on its own background thread so a chatty
+server can never fill the OS pipe buffer and deadlock waiting for a reader.
+
 Usage:
     python3 preflight.py <path-to-server-script> [--json] [--no-upload] [--checked-by "name"]
 """
@@ -65,6 +68,8 @@ class Fourgate:
         self.findings = []
         self._line_queue = queue.Queue()
         self._reader_thread = None
+        self._stderr_lines = []
+        self._stderr_thread = None
 
     def _next_id(self):
         self._id += 1
@@ -81,6 +86,15 @@ class Fourgate:
         finally:
             self._line_queue.put(None)
 
+    def _stderr_reader_loop(self):
+        """Drains stderr continuously so a chatty server can never fill the
+        OS pipe buffer and deadlock waiting for someone to read it."""
+        try:
+            for line in iter(self.proc.stderr.readline, ""):
+                self._stderr_lines.append(line.rstrip("\n"))
+        except Exception:
+            pass
+
     def start(self):
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"  # force the child to flush stdout immediately,
@@ -92,6 +106,8 @@ class Fourgate:
         )
         self._reader_thread = threading.Thread(target=self._reader_loop, daemon=True)
         self._reader_thread.start()
+        self._stderr_thread = threading.Thread(target=self._stderr_reader_loop, daemon=True)
+        self._stderr_thread.start()
 
     def stop(self):
         if self.proc and self.proc.poll() is None:
@@ -276,6 +292,12 @@ class Fourgate:
                 break
 
         self.stop()
+        if self._stderr_lines:
+            self.findings.append({
+                "level": "INFO", "check": "stderr_activity",
+                "message": f"Server wrote {len(self._stderr_lines)} line(s) to stderr "
+                           f"(expected and healthy — that's where logs belong, not stdout).",
+            })
         return self.findings
 
 
