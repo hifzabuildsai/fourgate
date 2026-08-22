@@ -2,9 +2,9 @@
 
 **Open source · MCP preflight**
 
-## Catch it
-## before the agent
-## does.
+Catch it
+before the agent
+does.
 
 **Checks whether your MCP connector actually protects identity and fails closed — before a user finds out it doesn't.**
 
