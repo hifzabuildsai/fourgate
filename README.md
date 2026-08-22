@@ -1,5 +1,11 @@
 # Fourgate
 
+**Open source · MCP preflight**
+
+## Catch it
+## before the agent
+## does.
+
 **Checks whether your MCP connector actually protects identity and fails closed — before a user finds out it doesn't.**
 
 Fourgate is a preflight checker for [MCP](https://modelcontextprotocol.io) connectors. It spawns your server, talks real JSON-RPC to it over stdio, and catches the failure modes that break agent connections silently — before you ship.
