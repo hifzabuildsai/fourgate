@@ -1,0 +1,21 @@
+{
+  "baseline_version": 1,
+  "server": "silent-demo-server",
+  "tools": {
+    "fetch_document": {
+      "contract_hash": "sha256:fetch_document-v1",
+      "required_fields": ["content"],
+      "observed_fields": []
+    },
+    "search_tickets": {
+      "contract_hash": "sha256:search_tickets-v1",
+      "required_fields": ["content"],
+      "observed_fields": ["results", "count"]
+    },
+    "list_items": {
+      "contract_hash": "sha256:list_items-v1",
+      "required_fields": ["content"],
+      "observed_fields": ["next_page_token"]
+    }
+  }
+}

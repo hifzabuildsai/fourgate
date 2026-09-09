@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Fourgate — runtime wrap (Steps 1-4: raw byte proxy + call correlation +
-fail-open classify gate)
+Fourgate — runtime wrap (Steps 1-5a: raw byte proxy + call correlation +
+fail-open classify gate + real silent_empty classifier)
 
 Spawns a command-configured local stdio MCP server as a child process and
 pumps bytes between the real client (this process's own stdin/stdout) and
@@ -10,11 +10,11 @@ tracks which `tools/call` request a later response belongs to, and runs
 every resolved `tools/call` result through a bounded classify gate before
 forwarding it.
 
-The gate installed in this step is a no-op — it never produces a verdict,
-so what reaches the client is always the original bytes — but its fail-open
-mechanism (a worker thread, a 100 ms budget, catch-everything) is real and
-is what Step 5's actual classifier will run inside. See specs/runtime-wrap.md
-FR-1, FR-2 and plan.md Steps 1-4.
+classify.classify() is now real (Step 5a: baseline-gated silent_empty),
+but its verdict is still discarded — what reaches the client is always
+the original bytes. Wiring a verdict into the forwarded result is Step 6.
+See specs/runtime-wrap.md FR-1, FR-2, FR-8, FR-12, FR-22 and plan.md
+Step 5 / Step 5a.
 
 Design decisions (plan.md D1-D5, D7):
 
@@ -51,7 +51,7 @@ Design decisions (plan.md D1-D5, D7):
        for identity.
 
 Usage:
-    python wrap/wrap.py -- <command> [args...]
+    python wrap/wrap.py [--baseline PATH] -- <command> [args...]
 """
 
 import concurrent.futures
@@ -61,22 +61,45 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
+
+# Sibling modules (flat scripts, no packaging — matching checker/'s
+# convention). Running this file directly already puts its own directory
+# first on sys.path, but a test loading it via importlib doesn't, so make
+# that explicit rather than depend on how this module gets imported.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import baseline  # noqa: E402
+import classify  # noqa: E402
 
 CHUNK_SIZE = 65536
 CLASSIFY_BUDGET_SECS = 0.1  # FR-2 / D5 — 100 ms wall-clock per result
 
 
 def _parse_argv(argv):
-    """Split `[wrap options...] -- <command> [args...]` into the two halves.
+    """Split `[wrap options...] -- <command> [args...]` into wrap-side
+    options and the command half.
 
-    Step 1 has no wrap-side options yet, so anything before `--` is
-    ignored; later steps add --server-label/--baseline/--selfcheck here
-    without changing how the command half is found.
+    Step 5a adds `--baseline PATH`; later steps add --server-label/
+    --selfcheck here without changing how the command half is found.
+
+    Returns `(baseline_path_or_None, target_cmd)`.
     """
-    if "--" not in argv:
-        return argv
-    idx = argv.index("--")
-    return argv[idx + 1 :]
+    if "--" in argv:
+        idx = argv.index("--")
+        wrap_args, target_cmd = argv[:idx], argv[idx + 1 :]
+    else:
+        wrap_args, target_cmd = [], argv
+
+    baseline_path = None
+    i = 0
+    while i < len(wrap_args):
+        if wrap_args[i] == "--baseline" and i + 1 < len(wrap_args):
+            baseline_path = wrap_args[i + 1]
+            i += 2
+        else:
+            i += 1
+
+    return baseline_path, target_cmd
 
 
 def _pump(read_fd, write_target, on_eof=None, on_line=None):
@@ -193,38 +216,31 @@ class CallTracker(object):
         return tool_name
 
 
-def _classify_stub(result_obj, tool_name):
-    """Step 4 placeholder for Step 5's real classifier — always no verdict.
-
-    `FOURGATE_FAULT` is a test-only hook (never read outside this
-    function) that lets tests inject the two failure modes FR-2 has to
-    survive without needing a real classifier yet:
-      - "raise": an internal error during classification.
-      - "hang":  classification that never returns on its own.
-    """
-    fault = os.environ.get("FOURGATE_FAULT")
-    if fault == "raise":
-        raise RuntimeError("FOURGATE_FAULT=raise")
-    if fault == "hang":
-        time.sleep(5)  # far past CLASSIFY_BUDGET_SECS — must never be waited on
-    return None
-
-
-def _run_classify_gate(result_obj, tool_name):
-    """Run `_classify_stub` under the FR-2 / D5 budget and return its
+def _run_classify_gate(result_obj, tool_name, contract):
+    """Run `classify.classify()` under the FR-2 / D5 budget and return its
     verdict, or `None` on timeout, exception, or any other internal
     failure. Never raises, never blocks past `CLASSIFY_BUDGET_SECS`.
 
     Uses a bare `Future` plus a daemon thread (rather than a persistent
-    executor) so a hung classify — the "hang" fault, or a real future
-    slow classifier — can never delay this process's shutdown: daemon
-    threads are dropped, not joined, at interpreter exit.
+    executor) so a hung classifier can never delay this process's
+    shutdown: daemon threads are dropped, not joined, at interpreter exit.
+
+    `FOURGATE_FAULT` is a test-only hook (never read outside this
+    function, and never seen by classify.py itself) that lets tests
+    inject the two failure modes FR-2 has to survive:
+      - "raise": an internal error during classification.
+      - "hang":  classification that never returns on its own.
     """
     future = concurrent.futures.Future()
 
     def _worker():
         try:
-            result = _classify_stub(result_obj, tool_name)
+            fault = os.environ.get("FOURGATE_FAULT")
+            if fault == "raise":
+                raise RuntimeError("FOURGATE_FAULT=raise")
+            if fault == "hang":
+                time.sleep(5)  # far past the budget — must never be waited on
+            result = classify.classify(result_obj, tool_name, contract)
         except Exception as exc:
             future.set_exception(exc)
         else:
@@ -238,24 +254,25 @@ def _run_classify_gate(result_obj, tool_name):
         return None
 
 
-def _forward_response_line(line, write_fd, tracker):
+def _forward_response_line(line, write_fd, tracker, loaded_baseline):
     """Handle one complete server->client line: gate it through classify
     if (and only if) it's the result of a tracked `tools/call`, then
-    forward it. Step 4's gate never produces a verdict, so the bytes
-    written are always the line's original bytes — there is no rewrite
-    path yet (that's Step 6).
+    forward it. The verdict is still discarded here — the bytes written
+    are always the line's original bytes; wiring a verdict into the
+    forwarded result is Step 6.
     """
     tool_name = tracker.resolve_response(line)
     if tool_name is not None:
         result_obj = _try_parse_json_object(line)
-        _run_classify_gate(result_obj, tool_name)  # verdict discarded (Step 4)
+        contract = baseline.lookup(loaded_baseline, tool_name)
+        _run_classify_gate(result_obj, tool_name, contract)  # verdict discarded (Step 5a)
     try:
         os.write(write_fd, line + b"\n")
     except OSError:
         pass
 
 
-def _pump_responses(read_fd, write_fd, tracker, on_eof=None):
+def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, on_eof=None):
     """Server->client direction only. Unlike `_pump`, this forwards at
     line granularity rather than per-raw-chunk: a `tools/call` result has
     to be gated through classify (bounded, D5) before it can be forwarded,
@@ -285,7 +302,7 @@ def _pump_responses(read_fd, write_fd, tracker, on_eof=None):
                     break
                 line = bytes(buf[:idx])
                 del buf[: idx + 1]
-                _forward_response_line(line, write_fd, tracker)
+                _forward_response_line(line, write_fd, tracker, loaded_baseline)
         if buf:
             # A trailing chunk with no terminating newline (e.g. the child
             # exited mid-write). Nothing to classify — forward as-is.
@@ -298,7 +315,7 @@ def _pump_responses(read_fd, write_fd, tracker, on_eof=None):
             on_eof()
 
 
-def run_proxy(target_cmd):
+def run_proxy(target_cmd, loaded_baseline=None):
     """Spawn `target_cmd` and proxy stdio bytes until it exits.
 
     Returns the child's exit code.
@@ -324,7 +341,7 @@ def run_proxy(target_cmd):
     )
     child_to_stdout = threading.Thread(
         target=_pump_responses,
-        args=(proc.stdout.fileno(), 1, tracker),
+        args=(proc.stdout.fileno(), 1, tracker, loaded_baseline),
         daemon=True,
     )
 
@@ -339,16 +356,18 @@ def run_proxy(target_cmd):
 
 
 def main():
-    target_cmd = _parse_argv(sys.argv[1:])
+    baseline_path, target_cmd = _parse_argv(sys.argv[1:])
     if not target_cmd:
         print(
-            "usage: wrap.py [options] -- <command> [args...]",
+            "usage: wrap.py [--baseline PATH] -- <command> [args...]",
             file=sys.stderr,
         )
         sys.exit(2)
 
+    loaded_baseline = baseline.load(baseline_path)
+
     try:
-        returncode = run_proxy(target_cmd)
+        returncode = run_proxy(target_cmd, loaded_baseline)
     except FileNotFoundError as exc:
         print(f"fourgate: failed to start wrapped server: {exc}", file=sys.stderr)
         sys.exit(1)
