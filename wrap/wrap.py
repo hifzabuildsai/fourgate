@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
 """
-Fourgate — runtime wrap (Step 1: raw byte proxy)
+Fourgate — runtime wrap (Steps 1-4: raw byte proxy + call correlation +
+fail-open classify gate)
 
 Spawns a command-configured local stdio MCP server as a child process and
 pumps bytes between the real client (this process's own stdin/stdout) and
-the child, unchanged, in both directions.
+the child, unchanged, in both directions. Alongside that forwarding, it
+tracks which `tools/call` request a later response belongs to, and runs
+every resolved `tools/call` result through a bounded classify gate before
+forwarding it.
 
-This step deliberately does no JSON-RPC parsing, no classification, and no
-rewriting — see specs/runtime-wrap.md FR-1 and plan.md Step 1. Later steps
-add inspection on top of this proxy without touching what it forwards.
+The gate installed in this step is a no-op — it never produces a verdict,
+so what reaches the client is always the original bytes — but its fail-open
+mechanism (a worker thread, a 100 ms budget, catch-everything) is real and
+is what Step 5's actual classifier will run inside. See specs/runtime-wrap.md
+FR-1, FR-2 and plan.md Steps 1-4.
 
-Design decisions (plan.md D1-D4):
+Design decisions (plan.md D1-D5, D7):
 
   D1 - The exact bytes read from one side are the exact bytes written to
        the other. No JSON decode/re-encode touches the forwarded stream,
        so a healthy session stays byte-identical to running the server
-       unwrapped.
+       unwrapped. Parsing (below) only ever sees a copy.
   D2 - Both directions move raw bytes: this process's own stdin/stdout via
        `os.read`/`os.write` on the raw file descriptors (bypassing Python's
        TextIOWrapper, which would translate `\n` <-> `\r\n` on Windows),
@@ -26,17 +32,38 @@ Design decisions (plan.md D1-D4):
   D4 - Two plain reader threads (client->child, child->client) rather than
        `selectors` - `select()` on Windows does not accept subprocess
        pipes (see checker/preflight.py for the same constraint).
+  D5 - The 100 ms budget (FR-2) is a real timeout, not an assumption that
+       classification is fast. Classify runs on a fresh daemon thread; the
+       calling thread waits on a `concurrent.futures.Future` with
+       `result(timeout=0.1)`. Timeout, exception, or (later) an
+       unparseable result all resolve to `None` — the original bytes are
+       what gets forwarded either way. The clock starts when the line is
+       fully received, so a slow classifier cannot push added latency past
+       the budget. The thread is daemon so a hung classify can never block
+       process shutdown.
+  D7 - `CallTracker` records `id -> tool name` when a `tools/call` request
+       passes client->server, and consumes that entry when the matching
+       response passes server->client. A response with no tracked id, or
+       whose id resolves but which carries no `result`, resolves to no
+       binding — "no result, no verdict; unknown id, no verdict." This is
+       what a later classify/verdict gate will use to know which tool a
+       result belongs to, without ever needing to trust the payload itself
+       for identity.
 
 Usage:
     python wrap/wrap.py -- <command> [args...]
 """
 
+import concurrent.futures
+import json
 import os
 import subprocess
 import sys
 import threading
+import time
 
 CHUNK_SIZE = 65536
+CLASSIFY_BUDGET_SECS = 0.1  # FR-2 / D5 — 100 ms wall-clock per result
 
 
 def _parse_argv(argv):
@@ -52,14 +79,18 @@ def _parse_argv(argv):
     return argv[idx + 1 :]
 
 
-def _pump(read_fd, write_target, on_eof=None):
+def _pump(read_fd, write_target, on_eof=None, on_line=None):
     """Copy raw bytes from `read_fd` to `write_target` until EOF or error.
 
     `write_target` is either a raw fd (int) or a file object with .write()
     (used for the child's stdin pipe). Each read is a single `os.read`
     call, so a small message is forwarded as soon as it arrives instead of
-    waiting for a full CHUNK_SIZE buffer to accumulate.
+    waiting for a full CHUNK_SIZE buffer to accumulate. Forwarding happens
+    first and unconditionally; `on_line` (if given) then gets a *copy* of
+    each complete newline-delimited line assembled from the same bytes —
+    it can never affect what was already written downstream (D1).
     """
+    line_buf = bytearray() if on_line is not None else None
     try:
         while True:
             try:
@@ -76,6 +107,15 @@ def _pump(read_fd, write_target, on_eof=None):
                     write_target.flush()
             except (BrokenPipeError, OSError, ValueError):
                 break
+            if on_line is not None:
+                line_buf.extend(data)
+                while True:
+                    idx = line_buf.find(b"\n")
+                    if idx == -1:
+                        break
+                    line = bytes(line_buf[:idx])
+                    del line_buf[: idx + 1]
+                    on_line(line)
     finally:
         if on_eof is not None:
             on_eof()
@@ -86,6 +126,176 @@ def _close_quietly(closeable):
         closeable.close()
     except OSError:
         pass
+
+
+def _try_parse_json_object(line_bytes):
+    """Best-effort JSON-RPC line parse for inspection only. Never raises;
+    anything that isn't a decodable JSON object is simply not tracked."""
+    try:
+        text = line_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    stripped = text.strip()
+    if not stripped:
+        return None
+    try:
+        obj = json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    return obj
+
+
+class CallTracker(object):
+    """Binds a `tools/call` response back to the tool it was a call to
+    (D7), from a copy of the traffic only — it never influences what gets
+    forwarded.
+
+    `resolve_response` answers "which tool, if any, is this result for" so
+    a later classify/verdict gate can act on it. It answers `None` (no
+    binding) for exactly the D7 cases: an id that was never tracked, or a
+    tracked id whose response carries no `result` (e.g. a JSON-RPC error).
+    Either way the entry is consumed — a second response for the same id
+    resolves to nothing, matching FR-24's "bind only to the originating
+    call" for the non-cancellation case this step covers.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._pending = {}  # request id -> tool name
+
+    def track_request(self, line_bytes):
+        obj = _try_parse_json_object(line_bytes)
+        if obj is None or obj.get("method") != "tools/call":
+            return
+        req_id = obj.get("id")
+        if req_id is None:
+            return  # a notification has no id and can never be resolved
+        params = obj.get("params") or {}
+        tool_name = params.get("name")
+        with self._lock:
+            self._pending[req_id] = tool_name
+
+    def resolve_response(self, line_bytes):
+        obj = _try_parse_json_object(line_bytes)
+        if obj is None:
+            return None
+        resp_id = obj.get("id")
+        if resp_id is None:
+            return None
+        with self._lock:
+            tool_name = self._pending.pop(resp_id, None)
+        if tool_name is None:
+            return None  # unknown id -> no verdict
+        if "result" not in obj:
+            return None  # no result -> no verdict
+        return tool_name
+
+
+def _classify_stub(result_obj, tool_name):
+    """Step 4 placeholder for Step 5's real classifier — always no verdict.
+
+    `FOURGATE_FAULT` is a test-only hook (never read outside this
+    function) that lets tests inject the two failure modes FR-2 has to
+    survive without needing a real classifier yet:
+      - "raise": an internal error during classification.
+      - "hang":  classification that never returns on its own.
+    """
+    fault = os.environ.get("FOURGATE_FAULT")
+    if fault == "raise":
+        raise RuntimeError("FOURGATE_FAULT=raise")
+    if fault == "hang":
+        time.sleep(5)  # far past CLASSIFY_BUDGET_SECS — must never be waited on
+    return None
+
+
+def _run_classify_gate(result_obj, tool_name):
+    """Run `_classify_stub` under the FR-2 / D5 budget and return its
+    verdict, or `None` on timeout, exception, or any other internal
+    failure. Never raises, never blocks past `CLASSIFY_BUDGET_SECS`.
+
+    Uses a bare `Future` plus a daemon thread (rather than a persistent
+    executor) so a hung classify — the "hang" fault, or a real future
+    slow classifier — can never delay this process's shutdown: daemon
+    threads are dropped, not joined, at interpreter exit.
+    """
+    future = concurrent.futures.Future()
+
+    def _worker():
+        try:
+            result = _classify_stub(result_obj, tool_name)
+        except Exception as exc:
+            future.set_exception(exc)
+        else:
+            future.set_result(result)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+    try:
+        return future.result(timeout=CLASSIFY_BUDGET_SECS)
+    except Exception:
+        return None
+
+
+def _forward_response_line(line, write_fd, tracker):
+    """Handle one complete server->client line: gate it through classify
+    if (and only if) it's the result of a tracked `tools/call`, then
+    forward it. Step 4's gate never produces a verdict, so the bytes
+    written are always the line's original bytes — there is no rewrite
+    path yet (that's Step 6).
+    """
+    tool_name = tracker.resolve_response(line)
+    if tool_name is not None:
+        result_obj = _try_parse_json_object(line)
+        _run_classify_gate(result_obj, tool_name)  # verdict discarded (Step 4)
+    try:
+        os.write(write_fd, line + b"\n")
+    except OSError:
+        pass
+
+
+def _pump_responses(read_fd, write_fd, tracker, on_eof=None):
+    """Server->client direction only. Unlike `_pump`, this forwards at
+    line granularity rather than per-raw-chunk: a `tools/call` result has
+    to be gated through classify (bounded, D5) before it can be forwarded,
+    so we cannot write bytes downstream until we know whether the line
+    they belong to needs that gate. Every other line — the majority of
+    traffic: initialize/tools-list responses, notifications, errors — is
+    forwarded immediately once complete, with no gate (FR-1's ungated,
+    byte-identical pass-through for non-tools/call traffic).
+
+    This still satisfies D1: what's written is exactly the bytes received,
+    just reassembled at newline boundaries instead of read()-call
+    boundaries — the forwarded byte *content* is unaffected.
+    """
+    buf = bytearray()
+    try:
+        while True:
+            try:
+                data = os.read(read_fd, CHUNK_SIZE)
+            except OSError:
+                break
+            if not data:
+                break
+            buf.extend(data)
+            while True:
+                idx = buf.find(b"\n")
+                if idx == -1:
+                    break
+                line = bytes(buf[:idx])
+                del buf[: idx + 1]
+                _forward_response_line(line, write_fd, tracker)
+        if buf:
+            # A trailing chunk with no terminating newline (e.g. the child
+            # exited mid-write). Nothing to classify — forward as-is.
+            try:
+                os.write(write_fd, bytes(buf))
+            except OSError:
+                pass
+    finally:
+        if on_eof is not None:
+            on_eof()
 
 
 def run_proxy(target_cmd):
@@ -101,15 +311,20 @@ def run_proxy(target_cmd):
         bufsize=0,
     )
 
+    tracker = CallTracker()
+
     stdin_to_child = threading.Thread(
         target=_pump,
         args=(0, proc.stdin),
-        kwargs={"on_eof": lambda: _close_quietly(proc.stdin)},
+        kwargs={
+            "on_eof": lambda: _close_quietly(proc.stdin),
+            "on_line": tracker.track_request,
+        },
         daemon=True,
     )
     child_to_stdout = threading.Thread(
-        target=_pump,
-        args=(proc.stdout.fileno(), 1),
+        target=_pump_responses,
+        args=(proc.stdout.fileno(), 1, tracker),
         daemon=True,
     )
 
