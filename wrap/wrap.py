@@ -57,8 +57,15 @@ Design decisions (plan.md D1-D7):
        `<server_label>/<tool_name>`, so two wrapped servers exposing an
        identically named tool still produce distinguishable verdicts.
 
+`--observe PATH` (new scope beyond plan.md Steps 1-7 — see
+wrap/observe.py) turns on a permanent, off-by-default observation mode:
+one shape-only JSON line appended per resolved tools/call result. It is
+a side channel and never affects the client-visible bytes (see D5's
+budget and observe.py's own docstring for why).
+
 Usage:
-    python wrap/wrap.py [--baseline PATH] [--server-label LABEL] -- <command> [args...]
+    python wrap/wrap.py [--baseline PATH] [--server-label LABEL]
+                         [--observe PATH] -- <command> [args...]
 """
 
 import concurrent.futures
@@ -77,6 +84,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import baseline  # noqa: E402
 import classify  # noqa: E402
+import observe  # noqa: E402
 import verdict  # noqa: E402
 import selfcheck  # noqa: E402
 
@@ -91,8 +99,10 @@ def _parse_argv(argv):
 
     Step 6 adds `--server-label LABEL` (FR-16); later steps add
     --selfcheck here without changing how the command half is found.
+    `--observe PATH` (new scope beyond plan.md Steps 1-7) is parsed the
+    same way as `--baseline`.
 
-    Returns `(baseline_path_or_None, server_label, target_cmd)`.
+    Returns `(baseline_path_or_None, server_label, observe_path_or_None, target_cmd)`.
     """
     if "--" in argv:
         idx = argv.index("--")
@@ -102,6 +112,7 @@ def _parse_argv(argv):
 
     baseline_path = None
     server_label = DEFAULT_SERVER_LABEL
+    observe_path = None
     i = 0
     while i < len(wrap_args):
         if wrap_args[i] == "--baseline" and i + 1 < len(wrap_args):
@@ -110,10 +121,13 @@ def _parse_argv(argv):
         elif wrap_args[i] == "--server-label" and i + 1 < len(wrap_args):
             server_label = wrap_args[i + 1]
             i += 2
+        elif wrap_args[i] == "--observe" and i + 1 < len(wrap_args):
+            observe_path = wrap_args[i + 1]
+            i += 2
         else:
             i += 1
 
-    return baseline_path, server_label, target_cmd
+    return baseline_path, server_label, observe_path, target_cmd
 
 
 def _pump(read_fd, write_target, on_eof=None, on_line=None):
@@ -268,7 +282,7 @@ def _run_classify_gate(result_obj, tool_name, contract):
         return None
 
 
-def _forward_response_line(line, write_fd, tracker, loaded_baseline, server_label):
+def _forward_response_line(line, write_fd, tracker, loaded_baseline, server_label, observe_path=None):
     """Handle one complete server->client line: gate it through classify
     if (and only if) it's the result of a tracked `tools/call`; if that
     produces a verdict, rewrite the line to deliver it in-band (FR-3)
@@ -276,27 +290,49 @@ def _forward_response_line(line, write_fd, tracker, loaded_baseline, server_labe
     falls through to forwarding the original line unchanged — the same
     fail-open guarantee FR-2 makes for classification extends to the
     rewrite step itself.
+
+    The client-visible bytes (rewritten or original) are always written
+    FIRST. Only after that does this function optionally hand the same
+    result to observe.py (new scope beyond plan.md Steps 1-7) — so a
+    slow or failing observe write can never delay or affect what the
+    model receives.
     """
     tool_name = tracker.resolve_response(line)
+    result_obj = None
+    matched_verdict = None
+    wrote_rewritten_line = False
+
     if tool_name is not None:
         result_obj = _try_parse_json_object(line)
-        contract = baseline.lookup(loaded_baseline, tool_name)
-        qualified_tool = f"{server_label}/{tool_name}"  # FR-16
-        matched_verdict = _run_classify_gate(result_obj, qualified_tool, contract)
-        if matched_verdict is not None:
-            try:
-                rewritten_line = verdict.to_line(verdict.attach(result_obj, matched_verdict))
-                os.write(write_fd, rewritten_line)
-                return
-            except Exception:
-                pass  # rewrite failed — fall through to the original bytes below
-    try:
-        os.write(write_fd, line + b"\n")
-    except OSError:
-        pass
+        if result_obj is not None:
+            contract = baseline.lookup(loaded_baseline, tool_name)
+            qualified_tool = f"{server_label}/{tool_name}"  # FR-16
+            matched_verdict = _run_classify_gate(result_obj, qualified_tool, contract)
+            if matched_verdict is not None:
+                try:
+                    rewritten_line = verdict.to_line(verdict.attach(result_obj, matched_verdict))
+                    os.write(write_fd, rewritten_line)
+                    wrote_rewritten_line = True
+                except Exception:
+                    pass  # rewrite failed — fall through to the original bytes below
+
+    if not wrote_rewritten_line:
+        try:
+            os.write(write_fd, line + b"\n")
+        except OSError:
+            pass
+
+    if observe_path is not None and tool_name is not None and result_obj is not None:
+        try:
+            record = observe.build_record(
+                line, result_obj, tool_name, server_label, matched_verdict is not None
+            )
+            observe.append_record(observe_path, record)
+        except Exception:
+            pass  # observation must never affect the live path
 
 
-def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, server_label, on_eof=None):
+def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, server_label, observe_path=None, on_eof=None):
     """Server->client direction only. Unlike `_pump`, this forwards at
     line granularity rather than per-raw-chunk: a `tools/call` result has
     to be gated through classify (bounded, D5) before it can be forwarded,
@@ -326,7 +362,9 @@ def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, server_label, o
                     break
                 line = bytes(buf[:idx])
                 del buf[: idx + 1]
-                _forward_response_line(line, write_fd, tracker, loaded_baseline, server_label)
+                _forward_response_line(
+                    line, write_fd, tracker, loaded_baseline, server_label, observe_path
+                )
         if buf:
             # A trailing chunk with no terminating newline (e.g. the child
             # exited mid-write). Nothing to classify — forward as-is.
@@ -339,7 +377,7 @@ def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, server_label, o
             on_eof()
 
 
-def run_proxy(target_cmd, loaded_baseline=None, server_label=DEFAULT_SERVER_LABEL):
+def run_proxy(target_cmd, loaded_baseline=None, server_label=DEFAULT_SERVER_LABEL, observe_path=None):
     """Spawn `target_cmd` and proxy stdio bytes until it exits.
 
     Returns the child's exit code.
@@ -366,6 +404,7 @@ def run_proxy(target_cmd, loaded_baseline=None, server_label=DEFAULT_SERVER_LABE
     child_to_stdout = threading.Thread(
         target=_pump_responses,
         args=(proc.stdout.fileno(), 1, tracker, loaded_baseline, server_label),
+        kwargs={"observe_path": observe_path},
         daemon=True,
     )
 
@@ -387,10 +426,11 @@ def main():
         # takes no target command of its own. See wrap/selfcheck.py.
         sys.exit(selfcheck.run())
 
-    baseline_path, server_label, target_cmd = _parse_argv(argv)
+    baseline_path, server_label, observe_path, target_cmd = _parse_argv(argv)
     if not target_cmd:
         print(
-            "usage: wrap.py [--baseline PATH] [--server-label LABEL] -- <command> [args...]\n"
+            "usage: wrap.py [--baseline PATH] [--server-label LABEL] [--observe PATH]"
+            " -- <command> [args...]\n"
             "       wrap.py --selfcheck",
             file=sys.stderr,
         )
@@ -399,7 +439,7 @@ def main():
     loaded_baseline = baseline.load(baseline_path)
 
     try:
-        returncode = run_proxy(target_cmd, loaded_baseline, server_label)
+        returncode = run_proxy(target_cmd, loaded_baseline, server_label, observe_path)
     except FileNotFoundError as exc:
         print(f"fourgate: failed to start wrapped server: {exc}", file=sys.stderr)
         sys.exit(1)
