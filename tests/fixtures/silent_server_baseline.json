@@ -7,6 +7,11 @@
       "required_fields": ["content"],
       "observed_fields": []
     },
+    "fetch_document_with_debug": {
+      "contract_hash": "sha256:fetch_document_with_debug-v1",
+      "required_fields": ["content"],
+      "observed_fields": []
+    },
     "search_tickets": {
       "contract_hash": "sha256:search_tickets-v1",
       "required_fields": ["content"],

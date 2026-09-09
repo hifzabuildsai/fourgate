@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 """
-Fourgate — runtime wrap (Steps 1-5a: raw byte proxy + call correlation +
-fail-open classify gate + real silent_empty classifier)
+Fourgate — runtime wrap (Steps 1-6: raw byte proxy + call correlation +
+fail-open classify gate + real silent_empty classifier + verdict rewrite)
 
 Spawns a command-configured local stdio MCP server as a child process and
 pumps bytes between the real client (this process's own stdin/stdout) and
 the child, unchanged, in both directions. Alongside that forwarding, it
-tracks which `tools/call` request a later response belongs to, and runs
-every resolved `tools/call` result through a bounded classify gate before
-forwarding it.
+tracks which `tools/call` request a later response belongs to, runs every
+resolved `tools/call` result through a bounded classify gate, and — when
+that gate actually returns a `silent_empty` verdict — rewrites the line
+so the verdict, not the original (empty) result, is what the client
+receives. Every other result still forwards byte-identical (FR-1).
 
-classify.classify() is now real (Step 5a: baseline-gated silent_empty),
-but its verdict is still discarded — what reaches the client is always
-the original bytes. Wiring a verdict into the forwarded result is Step 6.
-See specs/runtime-wrap.md FR-1, FR-2, FR-8, FR-12, FR-22 and plan.md
-Step 5 / Step 5a.
+See specs/runtime-wrap.md FR-1, FR-2, FR-3, FR-4, FR-5, FR-8, FR-12,
+FR-13, FR-14, FR-15, FR-16, FR-22 and plan.md Step 5 / 5a / 6.
 
-Design decisions (plan.md D1-D5, D7):
+Design decisions (plan.md D1-D7):
 
   D1 - The exact bytes read from one side are the exact bytes written to
        the other. No JSON decode/re-encode touches the forwarded stream,
@@ -46,12 +45,14 @@ Design decisions (plan.md D1-D5, D7):
        response passes server->client. A response with no tracked id, or
        whose id resolves but which carries no `result`, resolves to no
        binding — "no result, no verdict; unknown id, no verdict." This is
-       what a later classify/verdict gate will use to know which tool a
-       result belongs to, without ever needing to trust the payload itself
-       for identity.
+       what the classify/verdict gate uses to know which tool a result
+       belongs to, without ever needing to trust the payload itself for
+       identity. The verdict's `tool` field (FR-16) is
+       `<server_label>/<tool_name>`, so two wrapped servers exposing an
+       identically named tool still produce distinguishable verdicts.
 
 Usage:
-    python wrap/wrap.py [--baseline PATH] -- <command> [args...]
+    python wrap/wrap.py [--baseline PATH] [--server-label LABEL] -- <command> [args...]
 """
 
 import concurrent.futures
@@ -70,19 +71,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import baseline  # noqa: E402
 import classify  # noqa: E402
+import verdict  # noqa: E402
 
 CHUNK_SIZE = 65536
 CLASSIFY_BUDGET_SECS = 0.1  # FR-2 / D5 — 100 ms wall-clock per result
+DEFAULT_SERVER_LABEL = "server"  # used when --server-label is not given
 
 
 def _parse_argv(argv):
     """Split `[wrap options...] -- <command> [args...]` into wrap-side
     options and the command half.
 
-    Step 5a adds `--baseline PATH`; later steps add --server-label/
+    Step 6 adds `--server-label LABEL` (FR-16); later steps add
     --selfcheck here without changing how the command half is found.
 
-    Returns `(baseline_path_or_None, target_cmd)`.
+    Returns `(baseline_path_or_None, server_label, target_cmd)`.
     """
     if "--" in argv:
         idx = argv.index("--")
@@ -91,15 +94,19 @@ def _parse_argv(argv):
         wrap_args, target_cmd = [], argv
 
     baseline_path = None
+    server_label = DEFAULT_SERVER_LABEL
     i = 0
     while i < len(wrap_args):
         if wrap_args[i] == "--baseline" and i + 1 < len(wrap_args):
             baseline_path = wrap_args[i + 1]
             i += 2
+        elif wrap_args[i] == "--server-label" and i + 1 < len(wrap_args):
+            server_label = wrap_args[i + 1]
+            i += 2
         else:
             i += 1
 
-    return baseline_path, target_cmd
+    return baseline_path, server_label, target_cmd
 
 
 def _pump(read_fd, write_target, on_eof=None, on_line=None):
@@ -254,25 +261,35 @@ def _run_classify_gate(result_obj, tool_name, contract):
         return None
 
 
-def _forward_response_line(line, write_fd, tracker, loaded_baseline):
+def _forward_response_line(line, write_fd, tracker, loaded_baseline, server_label):
     """Handle one complete server->client line: gate it through classify
-    if (and only if) it's the result of a tracked `tools/call`, then
-    forward it. The verdict is still discarded here — the bytes written
-    are always the line's original bytes; wiring a verdict into the
-    forwarded result is Step 6.
+    if (and only if) it's the result of a tracked `tools/call`; if that
+    produces a verdict, rewrite the line to deliver it in-band (FR-3)
+    instead of the original bytes. Any failure in matching OR rewriting
+    falls through to forwarding the original line unchanged — the same
+    fail-open guarantee FR-2 makes for classification extends to the
+    rewrite step itself.
     """
     tool_name = tracker.resolve_response(line)
     if tool_name is not None:
         result_obj = _try_parse_json_object(line)
         contract = baseline.lookup(loaded_baseline, tool_name)
-        _run_classify_gate(result_obj, tool_name, contract)  # verdict discarded (Step 5a)
+        qualified_tool = f"{server_label}/{tool_name}"  # FR-16
+        matched_verdict = _run_classify_gate(result_obj, qualified_tool, contract)
+        if matched_verdict is not None:
+            try:
+                rewritten_line = verdict.to_line(verdict.attach(result_obj, matched_verdict))
+                os.write(write_fd, rewritten_line)
+                return
+            except Exception:
+                pass  # rewrite failed — fall through to the original bytes below
     try:
         os.write(write_fd, line + b"\n")
     except OSError:
         pass
 
 
-def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, on_eof=None):
+def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, server_label, on_eof=None):
     """Server->client direction only. Unlike `_pump`, this forwards at
     line granularity rather than per-raw-chunk: a `tools/call` result has
     to be gated through classify (bounded, D5) before it can be forwarded,
@@ -302,7 +319,7 @@ def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, on_eof=None):
                     break
                 line = bytes(buf[:idx])
                 del buf[: idx + 1]
-                _forward_response_line(line, write_fd, tracker, loaded_baseline)
+                _forward_response_line(line, write_fd, tracker, loaded_baseline, server_label)
         if buf:
             # A trailing chunk with no terminating newline (e.g. the child
             # exited mid-write). Nothing to classify — forward as-is.
@@ -315,7 +332,7 @@ def _pump_responses(read_fd, write_fd, tracker, loaded_baseline, on_eof=None):
             on_eof()
 
 
-def run_proxy(target_cmd, loaded_baseline=None):
+def run_proxy(target_cmd, loaded_baseline=None, server_label=DEFAULT_SERVER_LABEL):
     """Spawn `target_cmd` and proxy stdio bytes until it exits.
 
     Returns the child's exit code.
@@ -341,7 +358,7 @@ def run_proxy(target_cmd, loaded_baseline=None):
     )
     child_to_stdout = threading.Thread(
         target=_pump_responses,
-        args=(proc.stdout.fileno(), 1, tracker, loaded_baseline),
+        args=(proc.stdout.fileno(), 1, tracker, loaded_baseline, server_label),
         daemon=True,
     )
 
@@ -356,10 +373,10 @@ def run_proxy(target_cmd, loaded_baseline=None):
 
 
 def main():
-    baseline_path, target_cmd = _parse_argv(sys.argv[1:])
+    baseline_path, server_label, target_cmd = _parse_argv(sys.argv[1:])
     if not target_cmd:
         print(
-            "usage: wrap.py [--baseline PATH] -- <command> [args...]",
+            "usage: wrap.py [--baseline PATH] [--server-label LABEL] -- <command> [args...]",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -367,7 +384,7 @@ def main():
     loaded_baseline = baseline.load(baseline_path)
 
     try:
-        returncode = run_proxy(target_cmd, loaded_baseline)
+        returncode = run_proxy(target_cmd, loaded_baseline, server_label)
     except FileNotFoundError as exc:
         print(f"fourgate: failed to start wrapped server: {exc}", file=sys.stderr)
         sys.exit(1)
