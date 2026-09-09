@@ -87,13 +87,20 @@ class ScriptedSession:
         self.proc.stdin.write(data)
         self.proc.stdin.flush()
 
-    def send_request(self, method, params=None):
+    def write_request(self, method, params=None):
+        """Write a request and return its id without reading a response —
+        used to put a call "in flight" so the process can be killed before
+        it completes."""
         self._next_id += 1
         req_id = self._next_id
         msg = {"jsonrpc": "2.0", "id": req_id, "method": method}
         if params is not None:
             msg["params"] = params
         self._write(msg)
+        return req_id
+
+    def send_request(self, method, params=None):
+        req_id = self.write_request(method, params)
         return self._read_json_line(expect_id=req_id)
 
     def send_notification(self, method, params=None):
@@ -172,3 +179,53 @@ def test_tool_list_unchanged():
     wrapped_names = [t["name"] for t in wrapped_tools["result"]["tools"]]
     assert wrapped_names == direct_names
     assert wrapped_names == ["add_numbers", "get_greeting", "divide"]
+
+
+def test_call_does_not_complete_without_wrap():
+    """plan.md Step 2 — on-path proof (FR-1).
+
+    Fourgate must sit *on* the path, not beside it as a passive recorder:
+    if killing the wrap process itself still let a pending call complete,
+    something else would have to be relaying client<->server traffic and
+    the wrap would just be watching. Send a tools/call, kill the wrap with
+    no read in between (so the call is genuinely in flight, not already
+    answered), and assert the client never sees a response.
+    """
+    session = ScriptedSession(_wrapped_cmd())
+    try:
+        init = session.send_request(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "fourgate-test", "version": "0.1"},
+            },
+        )
+        assert init is not None and "result" in init, f"bad initialize response: {init}"
+
+        session.send_notification("notifications/initialized")
+
+        tools = session.send_request("tools/list", {})
+        assert tools is not None and "result" in tools, f"bad tools/list response: {tools}"
+
+        # Put a call in flight, then kill the wrap immediately — no read
+        # in between — before it has any chance to relay a response back.
+        req_id = session.write_request(
+            "tools/call", {"name": "add_numbers", "arguments": {"a": 2, "b": 3}}
+        )
+        session.proc.kill()
+        session.proc.wait(timeout=3)
+
+        response = session._read_json_line(expect_id=req_id, timeout=1.5)
+        assert response is None, (
+            f"tools/call completed even though the wrap process was killed "
+            f"mid-call: {response}"
+        )
+    finally:
+        if session.proc.poll() is None:
+            session.proc.kill()
+        try:
+            session.proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            pass
+        session._reader.join(timeout=1)
