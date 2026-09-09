@@ -16,6 +16,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CLEAN_SERVER = REPO_ROOT / "fixtures" / "clean_server.py"
+CLEAN_SERVER_BASELINE = REPO_ROOT / "tests" / "fixtures" / "clean_server_baseline.json"
 WRAP = REPO_ROOT / "wrap" / "wrap.py"
 
 TIMEOUT = 5.0
@@ -129,8 +130,20 @@ def direct_cmd():
     return [sys.executable, str(CLEAN_SERVER)]
 
 
-def wrapped_cmd():
-    return [sys.executable, str(WRAP), "--", sys.executable, str(CLEAN_SERVER)]
+def wrapped_cmd(baseline_path=None, server_label=None):
+    """Build the wrap command over fixtures/clean_server.py. With no
+    arguments this is unchanged from Steps 1-4 (no classifier activity at
+    all). Passing `baseline_path` puts a *live* classifier on the path —
+    used by the Step 6 byte-identical check, which needs to prove the
+    rewrite machinery leaves a healthy session untouched, not just that
+    nothing was ever evaluated."""
+    cmd = [sys.executable, str(WRAP)]
+    if baseline_path is not None:
+        cmd += ["--baseline", str(baseline_path)]
+    if server_label is not None:
+        cmd += ["--server-label", server_label]
+    cmd += ["--", sys.executable, str(CLEAN_SERVER)]
+    return cmd
 
 
 def run_initialize(session):

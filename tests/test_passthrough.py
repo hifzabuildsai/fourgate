@@ -5,11 +5,28 @@ Runs the identical scripted JSON-RPC session against fixtures/clean_server.py
 directly and through wrap/wrap.py, and asserts the raw stdout bytes match
 (FR-1), plus that killing the wrap mid-call breaks a pending call (also
 FR-1 — proving Fourgate sits on the path, not beside it).
+
+The byte-identical tests run with a *live* baseline loaded (Step 6): none
+of clean_server.py's tools (add_numbers/get_greeting/divide) ever return
+an empty result, so the classifier runs on every response and never
+matches — proving the rewrite machinery leaves a healthy session
+untouched, not merely that nothing was ever evaluated because no baseline
+was configured at all.
 """
 
 import subprocess
 
-from _support import ScriptedSession, direct_cmd, run_initialize, wrapped_cmd
+from _support import (
+    CLEAN_SERVER_BASELINE,
+    ScriptedSession,
+    direct_cmd,
+    run_initialize,
+    wrapped_cmd,
+)
+
+
+def _wrapped_cmd_with_live_classifier():
+    return wrapped_cmd(baseline_path=CLEAN_SERVER_BASELINE, server_label="clean-demo-server")
 
 
 def run_scripted_session(cmd):
@@ -33,14 +50,14 @@ def run_scripted_session(cmd):
 
 def test_healthy_session_byte_identical():
     direct_bytes, _ = run_scripted_session(direct_cmd())
-    wrapped_bytes, _ = run_scripted_session(wrapped_cmd())
+    wrapped_bytes, _ = run_scripted_session(_wrapped_cmd_with_live_classifier())
 
     assert wrapped_bytes == direct_bytes
 
 
 def test_tool_list_unchanged():
     _, direct_tools = run_scripted_session(direct_cmd())
-    _, wrapped_tools = run_scripted_session(wrapped_cmd())
+    _, wrapped_tools = run_scripted_session(_wrapped_cmd_with_live_classifier())
 
     assert wrapped_tools == direct_tools
 

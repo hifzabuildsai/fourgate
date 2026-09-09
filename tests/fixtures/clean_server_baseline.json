@@ -1,0 +1,21 @@
+{
+  "baseline_version": 1,
+  "server": "clean-demo-server",
+  "tools": {
+    "add_numbers": {
+      "contract_hash": "sha256:add_numbers-v1",
+      "required_fields": ["content"],
+      "observed_fields": []
+    },
+    "get_greeting": {
+      "contract_hash": "sha256:get_greeting-v1",
+      "required_fields": ["content"],
+      "observed_fields": []
+    },
+    "divide": {
+      "contract_hash": "sha256:divide-v1",
+      "required_fields": ["content"],
+      "observed_fields": []
+    }
+  }
+}
