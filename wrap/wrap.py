@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Fourgate — runtime wrap (Steps 1-6: raw byte proxy + call correlation +
-fail-open classify gate + real silent_empty classifier + verdict rewrite)
+Fourgate — runtime wrap (Steps 1-7: raw byte proxy + call correlation +
+fail-open classify gate + real silent_empty classifier + verdict rewrite
++ self-check)
 
 Spawns a command-configured local stdio MCP server as a child process and
 pumps bytes between the real client (this process's own stdin/stdout) and
@@ -12,8 +13,13 @@ that gate actually returns a `silent_empty` verdict — rewrites the line
 so the verdict, not the original (empty) result, is what the client
 receives. Every other result still forwards byte-identical (FR-1).
 
+`--selfcheck` is a separate, standalone mode (Step 7, FR-18): it proves
+this whole path is really wired in by driving one real tools/call through
+a real (nested) wrap+fixture-server subprocess and surfacing the verdict
+that comes back — see wrap/selfcheck.py.
+
 See specs/runtime-wrap.md FR-1, FR-2, FR-3, FR-4, FR-5, FR-8, FR-12,
-FR-13, FR-14, FR-15, FR-16, FR-22 and plan.md Step 5 / 5a / 6.
+FR-13, FR-14, FR-15, FR-16, FR-18, FR-22 and plan.md Step 5 / 5a / 6 / 7.
 
 Design decisions (plan.md D1-D7):
 
@@ -72,6 +78,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import baseline  # noqa: E402
 import classify  # noqa: E402
 import verdict  # noqa: E402
+import selfcheck  # noqa: E402
 
 CHUNK_SIZE = 65536
 CLASSIFY_BUDGET_SECS = 0.1  # FR-2 / D5 — 100 ms wall-clock per result
@@ -373,10 +380,18 @@ def run_proxy(target_cmd, loaded_baseline=None, server_label=DEFAULT_SERVER_LABE
 
 
 def main():
-    baseline_path, server_label, target_cmd = _parse_argv(sys.argv[1:])
+    argv = sys.argv[1:]
+
+    if "--selfcheck" in argv:
+        # Step 7 (FR-18): a standalone check, not a proxy invocation — it
+        # takes no target command of its own. See wrap/selfcheck.py.
+        sys.exit(selfcheck.run())
+
+    baseline_path, server_label, target_cmd = _parse_argv(argv)
     if not target_cmd:
         print(
-            "usage: wrap.py [--baseline PATH] [--server-label LABEL] -- <command> [args...]",
+            "usage: wrap.py [--baseline PATH] [--server-label LABEL] -- <command> [args...]\n"
+            "       wrap.py --selfcheck",
             file=sys.stderr,
         )
         sys.exit(2)
