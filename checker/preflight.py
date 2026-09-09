@@ -12,10 +12,6 @@ the official client SDK), so it can catch and report the exact failure modes:
             checks whether the server fails closed (clean error) or fails
             open (crash / hang / silently-coerced bad data).
 
-Results print locally AND (unless --no-upload is passed) get pushed to a
-shared Supabase table, so every run -- yours or a student's -- lands in the
-same place instead of staying stuck on one laptop.
-
 Cross-platform note: line reading uses a background thread + queue rather
 than the `selectors` module. `selectors`' default backend wraps
 `select.select()`, which on Windows only supports real sockets -- not pipes
@@ -26,7 +22,7 @@ stderr is drained continuously on its own background thread so a chatty
 server can never fill the OS pipe buffer and deadlock waiting for a reader.
 
 Usage:
-    python3 preflight.py <path-to-server-script> [--json] [--no-upload] [--checked-by "name"]
+    python3 preflight.py <path-to-server-script> [--json]
 """
 
 import json
@@ -38,17 +34,9 @@ import queue
 import time
 import textwrap
 import argparse
-import urllib.request
-import urllib.error
 
 
 TIMEOUT_SECS = 5
-
-SUPABASE_URL = os.environ.get("FOURGATE_SUPABASE_URL", "https://qkuvvlzeqosvfcherlyp.supabase.co")
-SUPABASE_KEY = os.environ.get(
-    "FOURGATE_SUPABASE_KEY",
-    "sb_publishable_B9fM7-VOLy1TT7yEY0C1cA_aHNGfsBh",
-)
 
 _COLOR = {
     "PASS": "\033[32m", "FAIL": "\033[31m", "WARN": "\033[33m",
@@ -309,56 +297,7 @@ def summarize(findings):
     return passes, fails, warns, result
 
 
-def upload_to_supabase(server_path, findings, checked_by):
-    passes, fails, warns, result = summarize(findings)
-    try:
-        run_payload = json.dumps({
-            "connector_name": server_path,
-            "language": "python",
-            "checked_by": checked_by or "anonymous",
-            "total_checks": len(findings),
-            "passed": len(passes),
-            "failed": len(fails),
-            "warnings": len(warns),
-            "overall_result": result,
-        }).encode()
-
-        req = urllib.request.Request(
-            f"{SUPABASE_URL}/rest/v1/runs",
-            data=run_payload,
-            method="POST",
-            headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-                "Prefer": "return=representation",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            run_row = json.loads(resp.read())[0]
-        run_id = run_row["id"]
-
-        findings_payload = json.dumps([
-            {"run_id": run_id, "level": f["level"], "check_type": f["check"], "message": f["message"]}
-            for f in findings
-        ]).encode()
-        req2 = urllib.request.Request(
-            f"{SUPABASE_URL}/rest/v1/findings",
-            data=findings_payload,
-            method="POST",
-            headers={
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-            },
-        )
-        urllib.request.urlopen(req2, timeout=5)
-        return True, None
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, KeyError, IndexError) as e:
-        return False, str(e)
-
-
-def print_report(server_path, findings, uploaded, upload_error):
+def print_report(server_path, findings):
     color = _use_color()
 
     def c(level, text):
@@ -379,10 +318,6 @@ def print_report(server_path, findings, uploaded, upload_error):
 
     print("-" * 60)
     print(f"  {len(passes)} passed, {len(fails)} failed, {len(warns)} warnings")
-    if uploaded:
-        print(c("INFO", "  ↑ synced to shared log") if color else "  synced to shared log")
-    elif upload_error is not None:
-        print(f"  (not synced: {upload_error})")
     print()
 
     if fails:
@@ -396,12 +331,12 @@ def print_report(server_path, findings, uploaded, upload_error):
         return 0
 
 
-def print_json_report(server_path, findings, uploaded, upload_error):
+def print_json_report(server_path, findings):
     passes, fails, warns, result = summarize(findings)
     payload = {
         "server": server_path, "result": result,
         "counts": {"passed": len(passes), "failed": len(fails), "warnings": len(warns)},
-        "findings": findings, "synced": uploaded, "sync_error": upload_error,
+        "findings": findings,
     }
     print(json.dumps(payload, indent=2))
     return 1 if fails else 0
@@ -415,21 +350,15 @@ def main():
     )
     parser.add_argument("server_path", help="Path to the MCP server script to check (Python only, v0)")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
-    parser.add_argument("--no-upload", action="store_true", help="Skip syncing this run to the shared log")
-    parser.add_argument("--checked-by", default=None, help="Your name — tags this run in the shared log")
     args = parser.parse_args()
 
     checker = Fourgate(args.server_path)
     findings = checker.run()
 
-    uploaded, upload_error = (False, None)
-    if not args.no_upload:
-        uploaded, upload_error = upload_to_supabase(args.server_path, findings, args.checked_by)
-
     if args.json:
-        exit_code = print_json_report(args.server_path, findings, uploaded, upload_error)
+        exit_code = print_json_report(args.server_path, findings)
     else:
-        exit_code = print_report(args.server_path, findings, uploaded, upload_error)
+        exit_code = print_report(args.server_path, findings)
 
     sys.exit(exit_code)
 
