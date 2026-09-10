@@ -9,15 +9,25 @@ write cannot add latency to, or otherwise affect, the live response —
 the same principle FR-20 states for alerting, extended here to this
 side-channel too.
 
-For every resolved `tools/call` result — a response whose request id was
-bound to a tool name by wrap.py's CallTracker, the same binding
-wrap/classify.py's gate uses (D7) — append exactly one JSON line to the
-path given by `--observe` recording SHAPE ONLY:
+For every resolved `tools/call` response — a response whose request id
+was bound to a tool name by wrap.py's CallTracker — append exactly one
+JSON line to the path given by `--observe` recording SHAPE ONLY:
 
-    timestamp, server label, tool name, isError, content block count,
-    whether any content text is non-empty, whether structuredContent is
-    present, total payload size in bytes, and whether FR-8 (silent_empty)
-    would have fired against the loaded baseline.
+    timestamp, server label, tool name, isError, whether this was a
+    JSON-RPC protocol-level error rather than a result, content block
+    count, whether any content text is non-empty, whether
+    structuredContent is present, total payload size in bytes, and
+    whether FR-8 (silent_empty) would have fired against the loaded
+    baseline.
+
+Observe binds on its own CallTracker.resolve_for_observe, not the
+tool_name wrap/classify.py's gate uses (D7). D7 says a response with no
+`result` key (a JSON-RPC error) resolves to no verdict — correct for
+classify, which only ever rules on real results (FR-24) — but observe is
+a measurement of what actually happened on the wire, not a verdict, and
+a tracked call that came back as a protocol error is still a real,
+countable outcome. So observe sees it via `build_error_record` below,
+while classify still never does.
 
 This is the permanent replacement for a temporary debug hook that logged
 actual field values and was deleted for exactly that reason. The
@@ -82,11 +92,43 @@ def build_record(line_bytes, result_obj, tool_name, server_label, fr8_would_fire
         "server": server_label,
         "tool": tool_name,
         "is_error": bool(result.get("isError")),
+        "is_protocol_error": False,
         "content_block_count": len(content_list),
         "content_text_nonempty": content_text_nonempty,
         "structured_content_present": bool(result.get("structuredContent")),
         "payload_bytes": len(line_bytes),
         "fr8_would_fire": bool(fr8_would_fire),
+    }
+
+
+def build_error_record(line_bytes, tool_name, server_label):
+    """Shape-only observation record for a resolved `tools/call` response
+    that carries no `result` key at all — a JSON-RPC protocol-level error
+    (e.g. a transport failure on the wrapped server's side), as opposed
+    to a tool-level error which still arrives as a `result` with
+    `isError: true` and goes through `build_record` above.
+
+    Never reads the error object's `message` or `data` — the same
+    redaction discipline `build_record` applies to a result's fields
+    applies here to an error's, so an error message that happens to
+    echo back argument content (a bad URL, a failed query) still never
+    reaches this record. `content_block_count`, `content_text_nonempty`
+    and `structured_content_present` are all fixed at their empty/false
+    values since there is no `result` to derive them from, and
+    `fr8_would_fire` is fixed `False` since classify never runs against
+    a response with no `result` (D7) — there is no verdict to report.
+    """
+    return {
+        "timestamp": time.time(),
+        "server": server_label,
+        "tool": tool_name,
+        "is_error": False,
+        "is_protocol_error": True,
+        "content_block_count": 0,
+        "content_text_nonempty": False,
+        "structured_content_present": False,
+        "payload_bytes": len(line_bytes),
+        "fr8_would_fire": False,
     }
 
 
