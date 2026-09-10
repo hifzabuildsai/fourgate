@@ -10,6 +10,7 @@ gate will consume. No classify, verdict, or self-check exists yet.
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -97,3 +98,62 @@ def test_no_verdict_for_call_with_no_result():
     # Consuming the "no result" case above must not leave the entry
     # claimable by a later, better-formed response for the same id.
     assert tracker.resolve_response(_result_response(10, 3.0)) is None
+
+
+def test_error_response_binds_for_observe_but_not_for_verdict(tmp_path):
+    """observe's binding is separate from classify's D7 gate (new scope
+    beyond this file's original Step 3 charter — see wrap/observe.py):
+    a JSON-RPC error response for a tracked id must still produce an
+    observe record, even though it produces no verdict and the D7
+    behavior above is unchanged."""
+    tracker = wrap.CallTracker()
+    tracker.track_request(_call_request(42, "divide", {"a": 1, "b": 0}))
+
+    line = _error_response(42, "division by zero")
+    observe_path = tmp_path / "observe.jsonl"
+
+    read_fd, write_fd = os.pipe()
+    try:
+        wrap._forward_response_line(
+            line,
+            write_fd,
+            tracker,
+            loaded_baseline=None,
+            server_label="test-server",
+            observe_path=str(observe_path),
+        )
+    finally:
+        os.close(write_fd)
+
+    # No verdict: classify never runs (D7 — no `result` key), so the
+    # original error bytes pass through the client-visible side unchanged.
+    forwarded = os.read(read_fd, 4096)
+    os.close(read_fd)
+    assert forwarded == line + b"\n"
+
+    # But observe still recorded the call — a real, tracked outcome, not
+    # a verdict candidate.
+    records = [
+        json.loads(entry)
+        for entry in observe_path.read_text(encoding="utf-8").strip().splitlines()
+    ]
+    assert len(records) == 1
+    record = records[0]
+    assert record["server"] == "test-server"
+    assert record["tool"] == "divide"
+    assert record["is_error"] is False
+    assert record["is_protocol_error"] is True
+    assert record["content_block_count"] == 0
+    assert record["content_text_nonempty"] is False
+    assert record["structured_content_present"] is False
+    assert record["fr8_would_fire"] is False
+    assert record["payload_bytes"] > 0
+
+    # And the error message itself never made it into the record — shape
+    # only, same discipline as every other observe record.
+    assert "division by zero" not in json.dumps(record)
+
+    # Classify's own D7 binding was consumed exactly as before this fix:
+    # a later, better-formed response for the same id still resolves to
+    # nothing.
+    assert tracker.resolve_response(_result_response(42, 3.0)) is None

@@ -104,6 +104,7 @@ def test_observe_records_shape_only_fields(tmp_path):
         "server",
         "tool",
         "is_error",
+        "is_protocol_error",
         "content_block_count",
         "content_text_nonempty",
         "structured_content_present",
@@ -118,6 +119,7 @@ def test_observe_records_shape_only_fields(tmp_path):
     assert fetch_record["server"] == SERVER_LABEL
     assert fetch_record["tool"] == "fetch_document"
     assert fetch_record["is_error"] is False
+    assert fetch_record["is_protocol_error"] is False
     assert fetch_record["content_block_count"] == 0
     assert fetch_record["content_text_nonempty"] is False
     assert fetch_record["structured_content_present"] is False
@@ -126,6 +128,7 @@ def test_observe_records_shape_only_fields(tmp_path):
 
     assert search_record["tool"] == "search_tickets"
     assert search_record["is_error"] is False
+    assert search_record["is_protocol_error"] is False
     assert search_record["content_block_count"] == 1
     assert search_record["content_text_nonempty"] is True
     assert search_record["fr8_would_fire"] is False  # well-formed zero-result payload, not empty

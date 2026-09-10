@@ -199,22 +199,38 @@ def _try_parse_json_object(line_bytes):
 
 
 class CallTracker(object):
-    """Binds a `tools/call` response back to the tool it was a call to
-    (D7), from a copy of the traffic only — it never influences what gets
+    """Binds a `tools/call` response back to the tool it was a call to,
+    from a copy of the traffic only — it never influences what gets
     forwarded.
 
-    `resolve_response` answers "which tool, if any, is this result for" so
-    a later classify/verdict gate can act on it. It answers `None` (no
-    binding) for exactly the D7 cases: an id that was never tracked, or a
-    tracked id whose response carries no `result` (e.g. a JSON-RPC error).
-    Either way the entry is consumed — a second response for the same id
-    resolves to nothing, matching FR-24's "bind only to the originating
-    call" for the non-cancellation case this step covers.
+    Two independent bindings are kept, because classify/verdict and
+    observe need different answers to "does this response count":
+
+    `resolve_response` answers "which tool, if any, is this result for"
+    so the classify/verdict gate can act on it (D7). It answers `None`
+    (no binding) for exactly the D7 cases: an id that was never tracked,
+    or a tracked id whose response carries no `result` (e.g. a JSON-RPC
+    error). D7 is a correctness rule for verdicts (FR-24: only a real
+    result can produce a silent_empty verdict) and must not change here.
+
+    `resolve_for_observe` answers the weaker question "was this response
+    id tracked at all" — observe is a measurement, not a verdict, and
+    must see JSON-RPC error responses too (they're real tool-call
+    outcomes, just not ones classify can rule on). It binds on tracked
+    id alone, `result` key or not.
+
+    Either method consumes the entry it's asked about — a second
+    response for the same id resolves to nothing on that same binding,
+    matching FR-24's "bind only to the originating call" for the
+    non-cancellation case this step covers. The two bindings are tracked
+    and consumed separately so that whichever runs first (classify's D7
+    gate, which discards no-result responses) never starves the other.
     """
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._pending = {}  # request id -> tool name
+        self._pending = {}  # request id -> tool name (classify/verdict binding, D7)
+        self._pending_observe = {}  # request id -> tool name (observe binding — every resolved response)
 
     def track_request(self, line_bytes):
         obj = _try_parse_json_object(line_bytes)
@@ -227,6 +243,7 @@ class CallTracker(object):
         tool_name = params.get("name")
         with self._lock:
             self._pending[req_id] = tool_name
+            self._pending_observe[req_id] = tool_name
 
     def resolve_response(self, line_bytes):
         obj = _try_parse_json_object(line_bytes)
@@ -242,6 +259,16 @@ class CallTracker(object):
         if "result" not in obj:
             return None  # no result -> no verdict
         return tool_name
+
+    def resolve_for_observe(self, line_bytes):
+        obj = _try_parse_json_object(line_bytes)
+        if obj is None:
+            return None
+        resp_id = obj.get("id")
+        if resp_id is None:
+            return None
+        with self._lock:
+            return self._pending_observe.pop(resp_id, None)  # unknown id -> None; result or not, otherwise bound
 
 
 def _run_classify_gate(result_obj, tool_name, contract):
@@ -296,6 +323,14 @@ def _forward_response_line(line, write_fd, tracker, loaded_baseline, server_labe
     result to observe.py (new scope beyond plan.md Steps 1-7) — so a
     slow or failing observe write can never delay or affect what the
     model receives.
+
+    Observe binds via `tracker.resolve_for_observe`, not the `tool_name`
+    used for classify above: classify's D7 binding discards (and
+    consumes) any response with no `result` key, so reusing it here
+    would make error responses invisible to observe too. The two
+    bindings are tracked and popped independently in CallTracker for
+    exactly this reason — observe must see a JSON-RPC error for a
+    tracked call, classify must not treat it as a verdict candidate.
     """
     tool_name = tracker.resolve_response(line)
     result_obj = None
@@ -322,11 +357,19 @@ def _forward_response_line(line, write_fd, tracker, loaded_baseline, server_labe
         except OSError:
             pass
 
-    if observe_path is not None and tool_name is not None and result_obj is not None:
+    # Always pop the observe binding, even with no --observe path, so an
+    # unwatched tracker never accumulates entries for the life of the session.
+    observe_tool_name = tracker.resolve_for_observe(line)
+
+    if observe_path is not None and observe_tool_name is not None:
         try:
-            record = observe.build_record(
-                line, result_obj, tool_name, server_label, matched_verdict is not None
-            )
+            observe_result_obj = result_obj if result_obj is not None else _try_parse_json_object(line)
+            if observe_result_obj is not None and "result" in observe_result_obj:
+                record = observe.build_record(
+                    line, observe_result_obj, observe_tool_name, server_label, matched_verdict is not None
+                )
+            else:
+                record = observe.build_error_record(line, observe_tool_name, server_label)
             observe.append_record(observe_path, record)
         except Exception:
             pass  # observation must never affect the live path
