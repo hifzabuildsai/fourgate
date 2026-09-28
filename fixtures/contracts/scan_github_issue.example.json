@@ -17,6 +17,7 @@
         "title": "FOURGATE DISPOSABLE TEST"
       },
       "outcome_contract": {
+        "record_id_field": "number",
         "extract": {
           "number": {"source": "result", "path": "result.structuredContent.number"},
           "title": {"source": "arguments", "path": "title"}

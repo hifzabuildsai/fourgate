@@ -13,6 +13,7 @@
       "tool": "create_issue",
       "arguments": {"title": "FOURGATE-SCAN-TEST"},
       "outcome_contract": {
+        "record_id_field": "issue_id",
         "extract": {
           "issue_id": {"source": "result", "path": "result.structuredContent.issue_id"},
           "title": {"source": "arguments", "path": "title"}
