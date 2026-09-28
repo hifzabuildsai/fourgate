@@ -1,5 +1,7 @@
 # Fourgate
 
+**Fourgate catches silent failures in MCP connectors.**
+
 **Status: early, pre-alpha.** Fourgate is testing one narrow product thesis:
 
 > Fourgate verifies that a protected high-risk agent tool call actually changed the intended system of record, then gives the agent a deterministic recovery signal when it did not.

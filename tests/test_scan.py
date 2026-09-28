@@ -59,6 +59,25 @@ def test_verifier_timeout_is_unknown_never_pass(tmp_path):
         "create_issue", "UNKNOWN", "verifier_timeout")
 
 
+def test_success_without_record_id_is_fail_without_readback(tmp_path):
+    report = _run(_contract(tmp_path), tmp_path / "store.json", mode="no_record_id")
+    assert report.returncode == 1
+    row = json.loads(report.stdout)["cases"][0]
+    assert (row["status"], row["reason_code"], row["attempts"]) == (
+        "FAIL", "success_without_record_id", 0)
+    assert row["evidence"]["tool_response"]["result"]["structuredContent"] == {}
+    assert row["evidence"]["readback"] == {"reason_code": "readback_not_run_without_record_id"}
+
+
+def test_record_id_selector_must_reference_result(tmp_path):
+    contract = _contract(tmp_path)
+    data = json.loads(contract.read_text())
+    data["cases"][0]["outcome_contract"]["record_id_field"] = "title"
+    contract.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match="record_id_field"):
+        load_contract(contract, "disposable-demo")
+
+
 def test_malformed_authoritative_store_is_unknown(tmp_path):
     store = tmp_path / "malformed.json"
     store.write_text("not-json", encoding="utf-8")

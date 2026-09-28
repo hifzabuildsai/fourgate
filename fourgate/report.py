@@ -9,11 +9,14 @@ import tempfile
 from pathlib import Path
 
 SECRET_KEY = re.compile(r"(?:token|secret|password|api[_-]?key|authorization|cookie|credential)", re.I)
-SECRET_VALUE = re.compile(r"(?i)(?:github_pat_[A-Za-z0-9_]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|\bBearer\s+\S+|\bsk-[A-Za-z0-9_-]{12,})")
+SECRET_VALUE = re.compile(r"(?i)(?:github_pat_[A-Za-z0-9_]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|\bBearer\s+\S+|\bsk(?:-|_(?:test|live)_)[A-Za-z0-9_-]{12,})")
+URL_USERINFO = re.compile(r"([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]+@")
 
 
 def _secrets():
-    return sorted((value for key, value in os.environ.items() if SECRET_KEY.search(key) and len(value) >= 8),
+    return sorted((value for key, value in os.environ.items()
+                   if (SECRET_KEY.search(key) or key.upper() == "PWD" or key.upper().endswith("_URL"))
+                   and len(value) >= 8),
                   key=len, reverse=True)
 
 
@@ -33,6 +36,7 @@ def sanitize(value, secrets=None):
     if isinstance(value, str):
         for secret in secrets:
             value = value.replace(secret, "[REDACTED]")
+        value = URL_USERINFO.sub(r"\1[REDACTED]@", value)
         return SECRET_VALUE.sub("[REDACTED]", value)
     return value
 
@@ -42,12 +46,15 @@ def build(raw, contract_path):
     result["generated_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     for row in result["cases"]:
         if row["status"] == "FAIL":
+            comparison = ("Check the successful tool response for the contracted record ID; read-back was not run."
+                          if row.get("reason_code") == "success_without_record_id" else
+                          "Compare the tool result to the independent read-back in this report.")
             row["repro_steps"] = [
                 "Use only the named disposable test account and check verifier read access.",
                 "Set required credential environment variables locally; never paste them into the contract.",
                 "Run: fourgate scan " + str(contract_path) +
                 " --confirm-test-account " + result["test_account"] + " --report-dir REPORT_DIR",
-                "Compare the tool result to the independent read-back in this report.",
+                comparison,
             ]
     return sanitize(result)
 

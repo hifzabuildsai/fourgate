@@ -41,7 +41,7 @@ def main():
             if mode=="healthy": _persist(args.get("title"))
             _write({"jsonrpc":"2.0","id":mid,"result":{
                 "content":[{"type":"text","text":f"Created {ISSUE_ID}"}],
-                "structuredContent":{"issue_id":ISSUE_ID},
+                "structuredContent":{} if mode=="no_record_id" else {"issue_id":ISSUE_ID},
                 "isError":False
             }})
         elif mid is not None: _write({"jsonrpc":"2.0","id":mid,"error":{"code":-32601,"message":"method not found"}})

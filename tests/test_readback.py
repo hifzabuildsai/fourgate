@@ -41,7 +41,8 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None,
         contract = json.loads(DEMO.read_text())
         contract["server"]["command"] = server_command or [sys.executable, str(ROOT / "fixtures" / "outcome_server.py")]
         case = contract["cases"][0]
-        case["outcome_contract"] = {"extract": case["outcome_contract"]["extract"]}
+        case["outcome_contract"] = {"extract": case["outcome_contract"]["extract"],
+                                    "record_id_field": "issue_id"}
         case["readback"] = {
             "type": "http", "url_template": f"http://127.0.0.1:{httpd.server_port}/issues/{{issue_id}}",
             "expected_fields": {"title": "title"}, "missing_statuses": [404],
@@ -83,6 +84,14 @@ def test_auth_failure_is_unknown(tmp_path):
     result, row, _ = _run(tmp_path, "broken", 401)
     assert result.returncode == 1
     assert row["status"] == "UNKNOWN"
+
+
+def test_success_without_record_id_skips_http_readback(tmp_path):
+    result, row, calls = _run(tmp_path, "no_record_id", 200)
+    assert result.returncode == 1
+    assert (row["status"], row["reason_code"], row["attempts"]) == (
+        "FAIL", "success_without_record_id", 0)
+    assert calls == []
 
 
 def test_missing_token_never_sends_request(tmp_path):
