@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from wrap import outcome
+from . import readback
 
 MAX_CALL_TIMEOUT_MS = 10000
 MAX_STDOUT_LINE = 2 * 1024 * 1024
@@ -57,13 +58,16 @@ def load_contract(path, confirmation):
         check = case.get("outcome_contract")
         if not isinstance(check, dict) or not isinstance(check.get("extract"), dict) or not check["extract"]:
             raise ValueError("every case needs an outcome_contract with extract selectors")
-        verifier = check.get("verifier")
-        if not isinstance(verifier, dict) or not outcome._expand_command(verifier.get("command")) or not _positive_ms(
-            verifier.get("timeout_ms"), outcome.MAX_VERIFIER_TIMEOUT_MS
-        ):
-            raise ValueError("every case needs a bounded verifier command")
-        if not isinstance(check.get("allowed_failure_reasons"), list):
-            raise ValueError("allowed_failure_reasons must be a list")
+        if "readback" in case:
+            readback.validate(case["readback"], check["extract"])
+        else:
+            verifier = check.get("verifier")
+            if not isinstance(verifier, dict) or not outcome._expand_command(verifier.get("command")) or not _positive_ms(
+                verifier.get("timeout_ms"), outcome.MAX_VERIFIER_TIMEOUT_MS
+            ):
+                raise ValueError("every case needs readback or a bounded verifier command")
+            if not isinstance(check.get("allowed_failure_reasons"), list):
+                raise ValueError("allowed_failure_reasons must be a list")
         check["_contract_dir"] = str(file_path.parent)
     server["command"] = [sys.executable if s == "{python}" else s for s in command]
     server["_contract_dir"] = str(file_path.parent)
@@ -151,6 +155,11 @@ def scan(path, confirmation):
             if name not in discovered:
                 rows.append({"tool": name, "status": "UNKNOWN", "reason_code": "tool_not_discovered"})
                 continue
+            readback_config = case.get("readback")
+            token_env = readback_config.get("token_env") if readback_config else None
+            if token_env and not os.environ.get(token_env):
+                rows.append({"tool": name, "status": "UNKNOWN", "reason_code": "credential_missing", "attempts": 0})
+                continue
             try:
                 _, response = client.request("tools/call", {"name": name, "arguments": case["arguments"]},
                                              server.get("call_timeout_ms", 5000))
@@ -158,10 +167,17 @@ def scan(path, confirmation):
                 rows.append({"tool": name, "status": "UNKNOWN", "reason_code": type(exc).__name__})
                 # A timed-out call may still mutate state, so never issue more writes.
                 break
-            evaluation = outcome.evaluate(response, case["arguments"], f"{server['test_account']}/{name}",
-                                          case["outcome_contract"])
+            try:
+                if "readback" in case:
+                    evaluation = readback.evaluate(case["readback"], case["outcome_contract"], case["arguments"], response)
+                else:
+                    evaluation = outcome.evaluate(response, case["arguments"], f"{server['test_account']}/{name}",
+                                                  case["outcome_contract"])
+            except Exception:
+                evaluation = {"status": "unknown", "reason_code": "readback_internal_error"}
             rows.append({"tool": name, "status": evaluation["status"].upper(),
-                         "reason_code": evaluation["reason_code"]})
+                         "reason_code": evaluation["reason_code"],
+                         "attempts": evaluation.get("attempts", 1)})
     except (TimeoutError, OSError, RuntimeError) as exc:
         rows.append({"tool": None, "status": "UNKNOWN", "reason_code": type(exc).__name__})
     finally:
