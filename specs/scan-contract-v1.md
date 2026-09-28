@@ -18,12 +18,30 @@ output selectors before it can run; it is not an end-to-end validation claim.
   command selects the current Python interpreter.
 - `write_tools`: unique explicit MCP tool names that may be called.
 - `cases`: each case names a tool in `write_tools`, exact test `arguments`,
-  and an `outcome_contract` with `extract` selectors and `record_id_field`.
-  This field names an extraction selector sourced from the tool result that
-  identifies the created record. The case uses either
+  and an `outcome_contract` with `extract` selectors. Optional
+  `record_id_field` names a result selector for the created record. When it is
+  absent, the configured read-back or verifier runs directly using the other
+  extracted fields (for example, a static test URL or request correlation key).
+  The case uses either
   the existing Outcome Guard `verifier` and `allowed_failure_reasons` command
   protocol or a `readback` object. A case is never
   synthesized from `tools/list`, and no malformed/edge calls are generated.
+
+To extract an ID from MCP text at `result.content[0].text`, use a result
+selector with `path: "result.content.0.text"` and one of:
+
+```json
+{"source":"result","path":"result.content.0.text","parse":"embedded_json","field":"id"}
+```
+
+```json
+{"source":"result","path":"result.content.0.text","parse":"regex","pattern":"\"id\"\\s*:\\s*\"(?P<id>[^\"]+)\"","group":"id"}
+```
+
+The embedded JSON selector can read `Email sent successfully! {"id":"..."}`;
+the regex captures its `id` value. The text is limited to 8192 characters and
+the regex pattern to 256 characters. Configure these selectors for a known
+test server response; text alone never confirms delivery or persistence.
 
 For `readback`, use:
 
@@ -46,10 +64,10 @@ For `readback`, use:
 The scanner validates every case before launching the MCP server. It initializes
 and lists tools, then calls only contracted names discovered on that server.
 Verifier PASS maps to `PASS`, confirmed postcondition failure to `FAIL`, and
-every failed call, timeout, or verifier fault to `UNKNOWN`. A successful tool
-response without its contracted record ID is `FAIL / success_without_record_id`
-with zero read-back attempts. This means the claimed success is unusable for
-record verification; it does not prove whether a write occurred.
+every failed call, timeout, or verifier fault to `UNKNOWN`. If
+`record_id_field` is configured but its ID is absent or text extraction fails,
+the verdict is `UNKNOWN / success_without_record_id` with zero read-back
+attempts. It does not prove whether a write occurred.
 After a timed-out write the scan stops: retrying the write may duplicate an
 action that already happened. Scan exits 0 only when all cases pass, 1 for a
 FAIL/UNKNOWN, and 2 for invalid configuration.

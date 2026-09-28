@@ -14,6 +14,7 @@ Anything else is UNKNOWN and therefore fail-open.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -21,6 +22,8 @@ import time
 VALID_RECOVERIES = {"stop", "retry_once", "ask_user"}
 VALID_MODES = {"shadow", "enforce"}
 MAX_VERIFIER_TIMEOUT_MS = 2000  # explicit per-contract cap for authoritative read-back
+MAX_TEXT_SELECTOR_CHARS = 8192
+MAX_REGEX_PATTERN_CHARS = 256
 
 
 class _Missing:
@@ -66,10 +69,75 @@ def _path_get(value, path):
     if path in (None, "", "."):
         return current
     for part in str(path).split("."):
-        if not isinstance(current, dict) or part not in current:
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        elif isinstance(current, list) and part.isdecimal() and int(part) < len(current):
+            current = current[int(part)]
+        else:
             return MISSING
-        current = current[part]
     return current
+
+
+def validate_text_selector(selector):
+    """Reject invalid text parsing contracts before a scan can write."""
+    mode = selector.get("parse")
+    if mode is None:
+        return
+    if selector.get("source") != "result" or selector.get("path") != "result.content.0.text":
+        raise ValueError("text parsing requires result.content.0.text")
+    if mode == "regex":
+        pattern = selector.get("pattern")
+        group = selector.get("group", 1)
+        if not isinstance(pattern, str) or not pattern or len(pattern) > MAX_REGEX_PATTERN_CHARS:
+            raise ValueError("regex pattern must be 1..256 characters")
+        try:
+            compiled = re.compile(pattern)
+        except re.error as exc:
+            raise ValueError("invalid text regex pattern") from exc
+        if (type(group) is int and not 1 <= group <= compiled.groups) or (
+                isinstance(group, str) and group not in compiled.groupindex) or (
+                type(group) is not int and not isinstance(group, str)):
+            raise ValueError("regex group must name a capture group")
+    elif mode == "embedded_json":
+        field = selector.get("field")
+        if not isinstance(field, str) or not field or any(not part for part in field.split(".")):
+            raise ValueError("embedded_json requires a nonempty field path")
+    else:
+        raise ValueError("parse must be regex or embedded_json")
+
+
+def _select(selector, arguments, result_obj):
+    source = selector.get("source")
+    path = selector.get("path")
+    if source == "arguments":
+        value = _path_get(arguments, path)
+    elif source == "result":
+        value = _path_get(result_obj, path)
+    else:
+        return MISSING
+    mode = selector.get("parse")
+    if not mode or value is MISSING:
+        return value
+    if not isinstance(value, str) or len(value) > MAX_TEXT_SELECTOR_CHARS:
+        return MISSING
+    if mode == "regex":
+        match = re.search(selector["pattern"], value)
+        if not match:
+            return MISSING
+        return match.group(selector.get("group", 1)) or MISSING
+    if mode == "embedded_json":
+        decoder = json.JSONDecoder()
+        for index, char in enumerate(value):
+            if char != "{":
+                continue
+            try:
+                document, _ = decoder.raw_decode(value, index)
+            except json.JSONDecodeError:
+                continue
+            found = _path_get(document, selector["field"])
+            if found is not MISSING:
+                return found
+    return MISSING
 
 
 def _extract(contract, arguments, result_obj):
@@ -80,14 +148,9 @@ def _extract(contract, arguments, result_obj):
     for name, selector in selectors.items():
         if not isinstance(name, str) or not isinstance(selector, dict):
             return None, "contract_invalid"
-        source = selector.get("source")
-        path = selector.get("path")
-        if source == "arguments":
-            value = _path_get(arguments, path)
-        elif source == "result":
-            value = _path_get(result_obj, path)
-        else:
+        if selector.get("source") not in ("arguments", "result"):
             return None, "contract_invalid"
+        value = _select(selector, arguments, result_obj)
         if value is MISSING:
             return None, "required_field_missing"
         extracted[name] = value

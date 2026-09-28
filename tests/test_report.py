@@ -38,7 +38,7 @@ def test_redacts_stripe_style_keys_env_paths_urls_and_userinfo(tmp_path, monkeyp
     monkeypatch.setenv("PWD", working_dir)
     monkeypatch.setenv("CUSTOM_DATABASE_URL", database_url)
     raw = {"scan_version": 1, "test_account": "disposable", "cases": [{
-        "tool": "create_issue", "status": "FAIL", "reason_code": "success_without_record_id",
+        "tool": "create_issue", "status": "UNKNOWN", "reason_code": "success_without_record_id",
         "evidence": {"request": {"url": "https://writer:password@api.example.test/issues",
                                  "key": stripe_key},
                      "tool_response": {"content": f"{working_dir} {database_url}"},
@@ -51,4 +51,4 @@ def test_redacts_stripe_style_keys_env_paths_urls_and_userinfo(tmp_path, monkeyp
         assert "[REDACTED]" in payload
     assert result["cases"][0]["evidence"]["request"]["url"] == (
         "https://[REDACTED]@api.example.test/issues")
-    assert "read-back was not run" in result["cases"][0]["repro_steps"][-1]
+    assert "repro_steps" not in result["cases"][0]

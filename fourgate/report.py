@@ -46,15 +46,12 @@ def build(raw, contract_path):
     result["generated_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     for row in result["cases"]:
         if row["status"] == "FAIL":
-            comparison = ("Check the successful tool response for the contracted record ID; read-back was not run."
-                          if row.get("reason_code") == "success_without_record_id" else
-                          "Compare the tool result to the independent read-back in this report.")
             row["repro_steps"] = [
                 "Use only the named disposable test account and check verifier read access.",
                 "Set required credential environment variables locally; never paste them into the contract.",
                 "Run: fourgate scan " + str(contract_path) +
                 " --confirm-test-account " + result["test_account"] + " --report-dir REPORT_DIR",
-                comparison,
+                "Compare the tool result to the independent read-back in this report.",
             ]
     return sanitize(result)
 

@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DEMO = ROOT / "fixtures" / "contracts" / "scan_demo.json"
 
 
-def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None, token_value=None):
+def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None, token_value=None,
+         without_record_id=False):
     store = tmp_path / "store.json"
     calls = []
 
@@ -48,6 +49,10 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None,
             "expected_fields": {"title": "title"}, "missing_statuses": [404],
             "attempts": 3, "interval_ms": 10, "timeout_ms": 1000,
         }
+        if without_record_id:
+            case["outcome_contract"].pop("record_id_field")
+            case["outcome_contract"]["extract"].pop("issue_id")
+            case["readback"]["url_template"] = f"http://127.0.0.1:{httpd.server_port}/issues/test-record"
         if token_env:
             case["readback"]["token_env"] = token_env
         contract_path = tmp_path / "scan.json"
@@ -86,12 +91,19 @@ def test_auth_failure_is_unknown(tmp_path):
     assert row["status"] == "UNKNOWN"
 
 
-def test_success_without_record_id_skips_http_readback(tmp_path):
+def test_success_without_record_id_is_unknown_and_skips_http_readback(tmp_path):
     result, row, calls = _run(tmp_path, "no_record_id", 200)
     assert result.returncode == 1
     assert (row["status"], row["reason_code"], row["attempts"]) == (
-        "FAIL", "success_without_record_id", 0)
+        "UNKNOWN", "success_without_record_id", 0)
     assert calls == []
+
+
+def test_without_record_id_field_runs_static_readback(tmp_path):
+    result, row, calls = _run(tmp_path, "no_record_id", 200, without_record_id=True)
+    assert result.returncode == 0
+    assert row["status"] == "PASS" and row["attempts"] == 1
+    assert calls == ["/issues/test-record"]
 
 
 def test_missing_token_never_sends_request(tmp_path):
