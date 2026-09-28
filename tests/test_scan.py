@@ -39,7 +39,7 @@ def test_real_scan_distinguishes_persisted_from_false_success(tmp_path):
     broken = _run(contract, tmp_path / "broken.json")
     assert broken.returncode == 1
     assert json.loads(broken.stdout)["cases"] == [
-        {"tool": "create_issue", "status": "FAIL", "reason_code": "record_missing"}]
+        {"tool": "create_issue", "status": "FAIL", "reason_code": "record_missing", "attempts": 1}]
     healthy_store = tmp_path / "healthy.json"
     healthy = _run(contract, healthy_store, mode="healthy")
     assert healthy.returncode == 0
@@ -51,7 +51,7 @@ def test_verifier_timeout_is_unknown_never_pass(tmp_path):
     report = _run(_contract(tmp_path), tmp_path / "store.json", verifier="hang")
     assert report.returncode == 1
     assert json.loads(report.stdout)["cases"][0] == {
-        "tool": "create_issue", "status": "UNKNOWN", "reason_code": "verifier_timeout"}
+        "tool": "create_issue", "status": "UNKNOWN", "reason_code": "verifier_timeout", "attempts": 1}
 
 
 def test_test_account_gate_rejects_before_spawning(tmp_path):

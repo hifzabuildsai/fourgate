@@ -1,0 +1,38 @@
+{
+  "scan_version": 1,
+  "server": {
+    "transport": "stdio",
+    "command": ["your-mcp-server", "--test-account"],
+    "test_account": "disposable-github-repository",
+    "protocol_version": "2025-11-25",
+    "call_timeout_ms": 5000
+  },
+  "write_tools": ["create_issue"],
+  "cases": [
+    {
+      "tool": "create_issue",
+      "arguments": {
+        "owner": "REPLACE_WITH_TEST_OWNER",
+        "repo": "REPLACE_WITH_TEST_REPO",
+        "title": "FOURGATE DISPOSABLE TEST"
+      },
+      "outcome_contract": {
+        "extract": {
+          "number": {"source": "result", "path": "result.structuredContent.number"},
+          "title": {"source": "arguments", "path": "title"}
+        }
+      },
+      "readback": {
+        "type": "github_issue",
+        "repository": "REPLACE_WITH_TEST_OWNER/REPLACE_WITH_TEST_REPO",
+        "issue_number_field": "number",
+        "token_env": "FOURGATE_GITHUB_READ_TOKEN",
+        "expected_fields": {"title": "title"},
+        "attempts": 3,
+        "interval_ms": 300,
+        "timeout_ms": 5000,
+        "missing_is_fail": false
+      }
+    }
+  ]
+}
