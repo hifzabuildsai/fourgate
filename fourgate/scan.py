@@ -75,9 +75,9 @@ def load_contract(path, confirmation):
 
 
 class StdioClient:
-    def __init__(self, command, cwd):
+    def __init__(self, command, cwd, env):
         self.proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, bufsize=0, env=os.environ.copy(), cwd=cwd)
+                                     stderr=subprocess.DEVNULL, bufsize=0, env=env, cwd=cwd)
         self._queue = queue.Queue()
         self._id = 0
         threading.Thread(target=self._read_lines, daemon=True).start()
@@ -147,7 +147,14 @@ def scan(path, confirmation):
     data = load_contract(path, confirmation)
     server = data["server"]
     rows = []
-    client = StdioClient(server["command"], server["_contract_dir"])
+    server_env = os.environ.copy()
+    # Independent verifier credentials must not be inherited by the MCP
+    # server executing the write. Use distinct names for write/read tokens.
+    for case in data["cases"]:
+        read_config = case.get("readback")
+        if read_config and read_config.get("token_env"):
+            server_env.pop(read_config["token_env"], None)
+    client = StdioClient(server["command"], server["_contract_dir"], server_env)
     try:
         discovered = client.initialize(server.get("protocol_version", "2024-11-05"))
         for case in data["cases"]:

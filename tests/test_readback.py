@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEMO = ROOT / "fixtures" / "contracts" / "scan_demo.json"
 
 
-def _run(tmp_path, mode, status, delayed=0, token_env=None):
+def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None, token_value=None):
     store = tmp_path / "store.json"
     calls = []
 
@@ -39,7 +39,7 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None):
     thread.start()
     try:
         contract = json.loads(DEMO.read_text())
-        contract["server"]["command"] = [sys.executable, str(ROOT / "fixtures" / "outcome_server.py")]
+        contract["server"]["command"] = server_command or [sys.executable, str(ROOT / "fixtures" / "outcome_server.py")]
         case = contract["cases"][0]
         case["outcome_contract"] = {"extract": case["outcome_contract"]["extract"]}
         case["readback"] = {
@@ -53,6 +53,9 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None):
         contract_path.write_text(json.dumps(contract))
         env = os.environ.copy()
         env.update(FOURGATE_DEMO_STORE=str(store), FOURGATE_DEMO_MODE=mode)
+        if token_env and token_value:
+            env[token_env] = token_value
+        env["FOURGATE_WRITE_TEST_TOKEN"] = "write-token-supplied-to-server"
         result = subprocess.run([sys.executable, "-m", "fourgate", "scan", str(contract_path),
                                  "--confirm-test-account", "disposable-demo"], cwd=ROOT, env=env,
                                 text=True, capture_output=True, timeout=12)
@@ -88,6 +91,21 @@ def test_missing_token_never_sends_request(tmp_path):
     assert row["status"] == "UNKNOWN" and row["reason_code"] == "credential_missing"
     assert calls == []
     assert not (tmp_path / "store.json").exists(), "missing verifier credentials must skip the write"
+
+
+def test_read_token_not_inherited_by_mcp_server(tmp_path):
+    marker = tmp_path / "child_env.json"
+    probe = tmp_path / "probe.py"
+    probe.write_text("import json, os, runpy, sys\n"
+                     "from pathlib import Path\n"
+                     f"Path({str(marker)!r}).write_text(json.dumps({{'read': 'FOURGATE_READ_TEST_TOKEN' in os.environ, "
+                     "'write': 'FOURGATE_WRITE_TEST_TOKEN' in os.environ}))\n"
+                     "runpy.run_path(sys.argv[1], run_name='__main__')\n")
+    command = [sys.executable, str(probe), str(ROOT / "fixtures" / "outcome_server.py")]
+    result, row, _ = _run(tmp_path, "healthy", 200, token_env="FOURGATE_READ_TEST_TOKEN",
+                          server_command=command, token_value="read-only-secret-token")
+    assert result.returncode == 0 and row["status"] == "PASS"
+    assert json.loads(marker.read_text()) == {"read": False, "write": True}
 
 
 def test_github_issue_url_and_404_default_uncertain(monkeypatch):

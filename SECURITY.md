@@ -12,6 +12,10 @@ The legacy runtime wrap stays on the same local stdio path. Verifier commands
 run locally, receive only contract-selected fields, and inherit the current
 environment. A configured HTTP/GitHub read-back makes outbound **GET requests
 to that configured endpoint**, carrying an env-supplied token if requested.
+The scanner removes `readback.token_env` values from the spawned MCP server's
+environment; use separate env names for the server's write credential and
+Fourgate's read credential. The local command verifier still inherits the
+operator environment, so only trusted verifier commands belong in contracts.
 The MCP server itself may also make outbound requests according to its own
 implementation. Therefore, "nothing leaves the machine" is true only for a
 fully local test fixture, not for HTTP/GitHub verification.

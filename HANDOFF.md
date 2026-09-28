@@ -18,7 +18,9 @@ The `fourgate scan` package entry point calls `fourgate.cli.main`:
    exact `--confirm-test-account` label **before spawning the server**.
 2. `StdioClient` starts the configured server in the contract directory,
    initializes MCP, and lists its tools. Only explicit names in `write_tools`
-   and `cases` are called; discovery never generates test calls.
+   and `cases` are called; discovery never generates test calls. Read-back
+   token env vars are removed from the child server environment; the write
+   and read credentials must use distinct env names.
 3. The exact contracted `tools/call` arguments are sent once per case. A
    timed-out write ends the scan rather than risking a duplicate side effect.
 4. A case selects either the existing bounded command verifier in
