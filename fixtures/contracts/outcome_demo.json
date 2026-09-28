@@ -1,0 +1,30 @@
+{
+  "contract_version": 1,
+  "tools": {
+    "create_issue": {
+      "extract": {
+        "issue_id": {
+          "source": "result",
+          "path": "result.structuredContent.issue_id"
+        },
+        "title": {
+          "source": "arguments",
+          "path": "title"
+        }
+      },
+      "verifier": {
+        "command": [
+          "{python}",
+          "fixtures/outcome_verifier.py"
+        ],
+        "timeout_ms": 1000,
+        "cwd": "../.."
+      },
+      "allowed_failure_reasons": [
+        "record_missing",
+        "field_mismatch"
+      ],
+      "recovery": "stop"
+    }
+  }
+}
