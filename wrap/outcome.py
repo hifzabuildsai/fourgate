@@ -145,6 +145,8 @@ def evaluate(result_obj, arguments, qualified_tool, contract):
         )
         if completed.returncode != 0:
             return {"status": "unknown", "reason_code": "verifier_error"}
+        if len(completed.stdout) > 1024 * 1024:
+            return {"status": "unknown", "reason_code": "verifier_malformed"}
         try:
             reply = json.loads(completed.stdout.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -176,12 +178,17 @@ def evaluate(result_obj, arguments, qualified_tool, contract):
             },
             "recovery": recovery,
         }
-        return {
+        evaluation = {
             "status": "fail",
             "reason_code": reason_code,
             "checked_fields": sorted(extracted.keys()),
             "verdict": verdict,
         }
+        # Scan reports may retain an approved verifier's read-back evidence.
+        # The runtime verdict and shape-only logs never include these values.
+        if isinstance(reply.get("evidence"), dict):
+            evaluation["readback_evidence"] = reply["evidence"]
+        return evaluation
     except subprocess.TimeoutExpired:
         return {"status": "unknown", "reason_code": "verifier_timeout"}
     except Exception:

@@ -161,7 +161,7 @@ def scan(path, confirmation):
                 rows.append({"tool": name, "status": "UNKNOWN", "reason_code": "credential_missing", "attempts": 0})
                 continue
             try:
-                _, response = client.request("tools/call", {"name": name, "arguments": case["arguments"]},
+                request, response = client.request("tools/call", {"name": name, "arguments": case["arguments"]},
                                              server.get("call_timeout_ms", 5000))
             except (TimeoutError, OSError, RuntimeError) as exc:
                 rows.append({"tool": name, "status": "UNKNOWN", "reason_code": type(exc).__name__})
@@ -175,9 +175,13 @@ def scan(path, confirmation):
                                                   case["outcome_contract"])
             except Exception:
                 evaluation = {"status": "unknown", "reason_code": "readback_internal_error"}
-            rows.append({"tool": name, "status": evaluation["status"].upper(),
-                         "reason_code": evaluation["reason_code"],
-                         "attempts": evaluation.get("attempts", 1)})
+            row = {"tool": name, "status": evaluation["status"].upper(),
+                   "reason_code": evaluation["reason_code"], "attempts": evaluation.get("attempts", 1)}
+            if row["status"] != "PASS":
+                row["evidence"] = {"request": request, "tool_response": response,
+                                   "readback": evaluation.get("readback_evidence", {
+                                       "reason_code": evaluation["reason_code"]})}
+            rows.append(row)
     except (TimeoutError, OSError, RuntimeError) as exc:
         rows.append({"tool": None, "status": "UNKNOWN", "reason_code": type(exc).__name__})
     finally:
