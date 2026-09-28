@@ -6,6 +6,48 @@
 
 MCP is the first interception surface, not the company boundary.
 
+## Scan a disposable MCP test account (under five minutes)
+
+From a clean checkout with Python 3.10+:
+
+```bash
+python -m pip install .
+```
+
+For the bundled **local fixture only**, set a disposable store location and
+scan its deliberately broken issue creation. Bash:
+
+```bash
+export FOURGATE_DEMO_STORE="$(mktemp -d)/issues.json"
+export FOURGATE_DEMO_MODE=broken
+fourgate scan fixtures/contracts/scan_demo.json \
+  --confirm-test-account disposable-demo --report-dir ./fourgate-output
+```
+
+PowerShell:
+
+```powershell
+$env:FOURGATE_DEMO_STORE = "$env:TEMP\fourgate-demo-issues.json"
+$env:FOURGATE_DEMO_MODE = "broken"
+fourgate scan fixtures/contracts/scan_demo.json --confirm-test-account disposable-demo --report-dir ./fourgate-output
+```
+
+The expected result is `FAIL / record_missing` (exit 1), with local
+`fourgate-report.json` and self-contained `fourgate-report.html` in the chosen
+directory. Set `FOURGATE_DEMO_MODE=healthy` and rerun with a fresh store path to
+see PASS (exit 0). UNKNOWN is never counted as PASS (exit 1). Invalid scan
+configuration exits 2. Reports include the exact contracted request, response,
+read-back evidence and reproduction steps for a confirmed failure, after
+best-effort secret redaction. Review locally before sharing.
+
+Only explicitly named write tools and arguments in the contract are called.
+The scanner supports stdio MCP servers and local command, generic HTTPS, or
+GitHub Issue read-back. HTTP/GitHub verification makes GET requests to the
+configured endpoint; no scan telemetry is sent to Fourgate. See
+[`specs/scan-contract-v1.md`](specs/scan-contract-v1.md) and
+[`SECURITY.md`](SECURITY.md). The GitHub contract is a template that still
+requires a disposable repository, tokens, and real end-to-end acceptance.
+
 ## Outcome Guard MVP
 
 The current pitch-ready slice protects explicitly contracted state-changing MCP tools. After a connector reports success, Fourgate extracts only the minimum contract-approved fields and runs a deterministic authoritative verifier. No LLM makes the runtime PASS/FAIL decision.

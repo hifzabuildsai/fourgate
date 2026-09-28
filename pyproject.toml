@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fourgate"
+version = "0.1.0"
+description = "Contracted MCP connector outcome scans"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "Hifza Zafar"}]
+dependencies = []
+
+[project.scripts]
+fourgate = "fourgate.cli:main"
+
+[tool.setuptools]
+packages = ["fourgate", "wrap"]
+
+[project.optional-dependencies]
+dev = ["pytest", "mcp==1.9.4"]

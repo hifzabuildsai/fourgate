@@ -153,10 +153,12 @@ def evaluate(config, contract, arguments, response):
                     return {"status": "pass", "reason_code": "postcondition_satisfied", "attempts": attempts,
                             "checked_fields": sorted(config["expected_fields"])}
                 last = {"status": "fail", "reason_code": "field_mismatch", "attempts": attempts,
-                        "checked_fields": sorted(config["expected_fields"])}
+                        "checked_fields": sorted(config["expected_fields"]),
+                        "readback_evidence": {"method": "GET", "url": url, "status": status, "body": document}}
             elif status in (config.get("missing_statuses", []) if config["type"] == "http"
                             else ([404] if config.get("missing_is_fail", False) else [])):
-                last = {"status": "fail", "reason_code": "record_missing", "attempts": attempts}
+                last = {"status": "fail", "reason_code": "record_missing", "attempts": attempts,
+                        "readback_evidence": {"method": "GET", "url": url, "status": status, "body": document}}
             else:
                 last = {"status": "unknown", "reason_code": "readback_unconfirmed", "attempts": attempts}
         if index + 1 < config.get("attempts", 3):

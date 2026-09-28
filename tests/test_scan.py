@@ -38,8 +38,12 @@ def test_real_scan_distinguishes_persisted_from_false_success(tmp_path):
     contract = _contract(tmp_path)
     broken = _run(contract, tmp_path / "broken.json")
     assert broken.returncode == 1
-    assert json.loads(broken.stdout)["cases"] == [
-        {"tool": "create_issue", "status": "FAIL", "reason_code": "record_missing", "attempts": 1}]
+    broken_row = json.loads(broken.stdout)["cases"][0]
+    assert (broken_row["tool"], broken_row["status"], broken_row["reason_code"], broken_row["attempts"]) == (
+        "create_issue", "FAIL", "record_missing", 1)
+    assert broken_row["evidence"]["request"]["params"]["name"] == "create_issue"
+    assert broken_row["evidence"]["tool_response"]["result"]["structuredContent"]["issue_id"] == "ISSUE-001"
+    assert broken_row["evidence"]["readback"] == {"lookup": {"issue_id": "ISSUE-001", "record": None}}
     healthy_store = tmp_path / "healthy.json"
     healthy = _run(contract, healthy_store, mode="healthy")
     assert healthy.returncode == 0
@@ -50,8 +54,18 @@ def test_real_scan_distinguishes_persisted_from_false_success(tmp_path):
 def test_verifier_timeout_is_unknown_never_pass(tmp_path):
     report = _run(_contract(tmp_path), tmp_path / "store.json", verifier="hang")
     assert report.returncode == 1
-    assert json.loads(report.stdout)["cases"][0] == {
-        "tool": "create_issue", "status": "UNKNOWN", "reason_code": "verifier_timeout", "attempts": 1}
+    row = json.loads(report.stdout)["cases"][0]
+    assert (row["tool"], row["status"], row["reason_code"]) == (
+        "create_issue", "UNKNOWN", "verifier_timeout")
+
+
+def test_malformed_authoritative_store_is_unknown(tmp_path):
+    store = tmp_path / "malformed.json"
+    store.write_text("not-json", encoding="utf-8")
+    report = _run(_contract(tmp_path), store)
+    assert report.returncode == 1
+    row = json.loads(report.stdout)["cases"][0]
+    assert row["status"] == "UNKNOWN" and row["reason_code"] == "verifier_error"
 
 
 def test_test_account_gate_rejects_before_spawning(tmp_path):
@@ -79,3 +93,21 @@ def test_duplicate_or_non_string_allowlist_rejected(tmp_path):
         contract.write_text(json.dumps(data))
         with pytest.raises(ValueError, match="write_tools"):
             load_contract(contract, "disposable-demo")
+
+
+def test_cli_writes_both_redacted_report_formats(tmp_path):
+    contract = _contract(tmp_path)
+    reports = tmp_path / "reports"
+    env = os.environ.copy()
+    env.update(FOURGATE_DEMO_STORE=str(tmp_path / "store.json"), FOURGATE_DEMO_MODE="broken",
+               FOURGATE_TEST_SECRET="SENSITIVE-SECRET-VALUE-123456")
+    process = subprocess.run([sys.executable, "-m", "fourgate", "scan", str(contract),
+                              "--confirm-test-account", "disposable-demo", "--report-dir", str(reports)],
+                             cwd=ROOT, env=env, capture_output=True, text=True, timeout=12)
+    assert process.returncode == 1
+    report = json.loads((reports / "fourgate-report.json").read_text())
+    assert report["cases"][0]["status"] == "FAIL"
+    assert report["cases"][0]["evidence"]["request"]["params"]["arguments"]["title"] == "FOURGATE-SCAN-TEST"
+    assert report["cases"][0]["evidence"]["tool_response"]["result"]["content"]
+    assert "repro_steps" in report["cases"][0]
+    assert (reports / "fourgate-report.html").read_text().startswith("<!doctype html>")

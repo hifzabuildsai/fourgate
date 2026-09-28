@@ -8,7 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -20,13 +24,16 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install ".[dev]"
 
       - name: Run full test suite
         run: python -m pytest -q
 
       - name: Run Outcome Guard demo
         run: python demo_outcome.py
+
+      - name: Check installed scan CLI
+        run: fourgate --help
 
       - name: Run runtime self-check
         run: python wrap/wrap.py --selfcheck

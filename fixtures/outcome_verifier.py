@@ -16,11 +16,14 @@ except Exception: sys.exit(2)
 try:
     p=Path(os.environ["FOURGATE_DEMO_STORE"])
     rows=json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
+    if not isinstance(rows,list): raise ValueError("store is not a list")
 except Exception:
-    rows=[]
+    # An unreadable or malformed authority cannot confirm record absence.
+    sys.exit(2)
 match=next((r for r in rows if r.get("id")==fields.get("issue_id")),None)
+evidence={"lookup":{"issue_id":fields.get("issue_id"),"record":match}}
 if match is None:
-    print(json.dumps({"status":"fail","reason_code":"record_missing"})); sys.exit(0)
+    print(json.dumps({"status":"fail","reason_code":"record_missing","evidence":evidence})); sys.exit(0)
 if match.get("title") != fields.get("title"):
-    print(json.dumps({"status":"fail","reason_code":"field_mismatch"})); sys.exit(0)
+    print(json.dumps({"status":"fail","reason_code":"field_mismatch","evidence":evidence})); sys.exit(0)
 print(json.dumps({"status":"pass"}))
