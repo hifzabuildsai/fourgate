@@ -58,11 +58,16 @@ def load_contract(path, confirmation):
         check = case.get("outcome_contract")
         if not isinstance(check, dict) or not isinstance(check.get("extract"), dict) or not check["extract"]:
             raise ValueError("every case needs an outcome_contract with extract selectors")
-        record_id_field = check.get("record_id_field")
-        selector = check["extract"].get(record_id_field) if isinstance(record_id_field, str) else None
-        if (not isinstance(selector, dict) or selector.get("source") != "result"
-                or not isinstance(selector.get("path"), str) or not selector["path"]):
-            raise ValueError("record_id_field must name a result extraction selector")
+        for selector in check["extract"].values():
+            if not isinstance(selector, dict):
+                raise ValueError("extract selectors must be objects")
+            outcome.validate_text_selector(selector)
+        if "record_id_field" in check:
+            record_id_field = check["record_id_field"]
+            selector = check["extract"].get(record_id_field) if isinstance(record_id_field, str) else None
+            if (not isinstance(selector, dict) or selector.get("source") != "result"
+                    or not isinstance(selector.get("path"), str) or not selector["path"]):
+                raise ValueError("record_id_field must name a result extraction selector")
         if "readback" in case:
             readback.validate(case["readback"], check["extract"])
         else:
@@ -182,11 +187,12 @@ def scan(path, confirmation):
             try:
                 check = case["outcome_contract"]
                 result = response.get("result")
-                selector = check["extract"][check["record_id_field"]]
-                record_id = outcome._path_get(response, selector["path"])
-                if (isinstance(result, dict) and not result.get("isError")
+                record_id_field = check.get("record_id_field")
+                record_id = (outcome._select(check["extract"][record_id_field], case["arguments"], response)
+                             if record_id_field is not None else None)
+                if (record_id_field is not None and isinstance(result, dict) and not result.get("isError")
                         and (record_id is outcome.MISSING or record_id is None or record_id == "")):
-                    evaluation = {"status": "fail", "reason_code": "success_without_record_id", "attempts": 0,
+                    evaluation = {"status": "unknown", "reason_code": "success_without_record_id", "attempts": 0,
                                   "readback_evidence": {"reason_code": "readback_not_run_without_record_id"}}
                 elif "readback" in case:
                     evaluation = readback.evaluate(case["readback"], case["outcome_contract"], case["arguments"], response)
