@@ -203,6 +203,9 @@ def scan(path, confirmation):
                 evaluation = {"status": "unknown", "reason_code": "readback_internal_error"}
             row = {"tool": name, "status": evaluation["status"].upper(),
                    "reason_code": evaluation["reason_code"], "attempts": evaluation.get("attempts", 1)}
+            for field in ("checked_fields", "mismatched_fields"):
+                if field in evaluation:
+                    row[field] = evaluation[field]
             if row["status"] != "PASS":
                 row["evidence"] = {"request": request, "tool_response": response,
                                    "readback": evaluation.get("readback_evidence", {

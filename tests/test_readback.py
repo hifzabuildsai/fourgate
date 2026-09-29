@@ -14,7 +14,7 @@ DEMO = ROOT / "fixtures" / "contracts" / "scan_demo.json"
 
 
 def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None, token_value=None,
-         without_record_id=False):
+         without_record_id=False, subject_values=None, report_dir=None):
     store = tmp_path / "store.json"
     calls = []
 
@@ -26,7 +26,10 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None,
             calls.append(self.path)
             code = 404 if len(calls) <= delayed else status
             if code == 200:
-                body = json.dumps({"title": "FOURGATE-SCAN-TEST"}).encode()
+                document = {"title": "FOURGATE-SCAN-TEST"}
+                if subject_values:
+                    document["subject"] = subject_values[1]
+                body = json.dumps(document).encode()
             else:
                 body = b"{}"
             self.send_response(code)
@@ -49,6 +52,10 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None,
             "expected_fields": {"title": "title"}, "missing_statuses": [404],
             "attempts": 3, "interval_ms": 10, "timeout_ms": 1000,
         }
+        if subject_values:
+            case["arguments"]["subject"] = subject_values[0]
+            case["outcome_contract"]["extract"]["subject"] = {"source": "arguments", "path": "subject"}
+            case["readback"]["expected_fields"] = {"subject": "subject"}
         if without_record_id:
             case["outcome_contract"].pop("record_id_field")
             case["outcome_contract"]["extract"].pop("issue_id")
@@ -62,8 +69,11 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None,
         if token_env and token_value:
             env[token_env] = token_value
         env["FOURGATE_WRITE_TEST_TOKEN"] = "write-token-supplied-to-server"
-        result = subprocess.run([sys.executable, "-m", "fourgate", "scan", str(contract_path),
-                                 "--confirm-test-account", "disposable-demo"], cwd=ROOT, env=env,
+        command = [sys.executable, "-m", "fourgate", "scan", str(contract_path),
+                   "--confirm-test-account", "disposable-demo"]
+        if report_dir:
+            command.extend(["--report-dir", str(report_dir)])
+        result = subprocess.run(command, cwd=ROOT, env=env,
                                 text=True, capture_output=True, timeout=12)
         return result, json.loads(result.stdout)["cases"][0], calls
     finally:
@@ -83,6 +93,36 @@ def test_confirmed_missing_after_retries(tmp_path):
     assert result.returncode == 1
     assert row["status"] == "FAIL" and row["reason_code"] == "record_missing"
     assert row["attempts"] == len(calls) == 3
+
+
+def test_subject_mismatch_details_reach_json_and_html_reports(tmp_path):
+    reports = tmp_path / "reports"
+    result, row, calls = _run(tmp_path, "healthy", 200, subject_values=("Expected subject", "Observed subject"),
+                              report_dir=reports)
+    assert result.returncode == 1
+    assert (row["status"], row["reason_code"], row["attempts"]) == ("FAIL", "field_mismatch", 3)
+    assert row["checked_fields"] == ["subject"]
+    assert row["mismatched_fields"] == [{"path": "subject", "expected": "Expected subject",
+                                         "observed": "Observed subject"}]
+    assert calls == ["/issues/ISSUE-001"] * 3
+    on_disk = json.loads((reports / "fourgate-report.json").read_text())["cases"][0]
+    assert on_disk["checked_fields"] == row["checked_fields"]
+    assert on_disk["mismatched_fields"] == row["mismatched_fields"]
+    page = (reports / "fourgate-report.html").read_text()
+    assert all(value in page for value in ("checked_fields", "mismatched_fields",
+                                        "Expected subject", "Observed subject"))
+
+
+def test_subject_mismatch_details_use_report_redaction(tmp_path):
+    secret = "sk_test_" + "x" * 24
+    reports = tmp_path / "reports"
+    result, row, _ = _run(tmp_path, "healthy", 200, subject_values=(secret, "Bearer " + secret),
+                          report_dir=reports)
+    assert result.returncode == 1 and row["status"] == "FAIL"
+    assert row["mismatched_fields"] == [{"path": "subject", "expected": "[REDACTED]",
+                                         "observed": "[REDACTED]"}]
+    assert secret not in (reports / "fourgate-report.json").read_text()
+    assert secret not in (reports / "fourgate-report.html").read_text()
 
 
 def test_auth_failure_is_unknown(tmp_path):
