@@ -147,13 +147,15 @@ def evaluate(config, contract, arguments, response):
                        for path in config["expected_fields"]):
                     last = {"status": "unknown", "reason_code": "readback_shape_invalid", "attempts": attempts}
                     continue
-                mismatched = [path for path, field in config["expected_fields"].items()
+                mismatched = [{"path": path, "expected": extracted[field],
+                               "observed": outcome._path_get(document, path)}
+                              for path, field in config["expected_fields"].items()
                               if outcome._path_get(document, path) != extracted[field]]
                 if not mismatched:
                     return {"status": "pass", "reason_code": "postcondition_satisfied", "attempts": attempts,
                             "checked_fields": sorted(config["expected_fields"])}
                 last = {"status": "fail", "reason_code": "field_mismatch", "attempts": attempts,
-                        "checked_fields": sorted(config["expected_fields"]),
+                        "checked_fields": sorted(config["expected_fields"]), "mismatched_fields": mismatched,
                         "readback_evidence": {"method": "GET", "url": url, "status": status, "body": document}}
             elif status in (config.get("missing_statuses", []) if config["type"] == "http"
                             else ([404] if config.get("missing_is_fail", False) else [])):
