@@ -1,9 +1,9 @@
 # Fourgate engineering handoff
 
-Status: pre-alpha, pending real target-server acceptance. This document tracks
-the proposed scan work in PRs #14, #15, and #16. `main` remains the earlier
-Outcome Guard demo until those PRs are reviewed and merged. Do not call this
-production-proven or tag v0.1.0 until the final acceptance gate below.
+Status: pre-alpha. Scan PRs #14–#21 are merged into `main`, and the `v0.1.0`
+tag already exists on `main`. One hosted target was tested by the operator on
+a disposable account; verifier-unavailable/unauthorized acceptance on a real
+target remains open. Do not call this production-proven.
 
 ## Purpose and supported path
 
@@ -58,9 +58,9 @@ fourgate scan fixtures/contracts/scan_demo.json \
 
 Expected exit 1/FAIL. Change mode to `healthy` with a fresh store path for
 exit 0/PASS. Exit 2 means invalid config/report I/O; operational uncertainty
-is exit 1/UNKNOWN. The demo and full suite pass on Linux/Windows CI in PR #16.
-The installed CLI was also tested from `/tmp` after `pip install .` in a fresh
-virtual environment.
+is exit 1/UNKNOWN. Linux/Windows CI is configured in `.github/workflows/ci.yml`;
+check the latest run for the current commit. An installed CLI smoke test was
+performed from `/tmp` after `pip install .` in a fresh virtual environment.
 
 ## Contract and new verifiers
 
@@ -96,9 +96,15 @@ enters the runtime model-visible verdict or shape-only Outcome Guard logs.
 
 ## Known limits and pending work
 
-- Real GitHub MCP server and any customer target server have **not** been run
-  end-to-end; no credentials or target configuration were supplied in this
-  session. The template is not evidence of a live integration.
+- The operator reports one real hosted email-sending MCP write on a disposable
+  account. A separate read-back credential and authoritative HTTPS GET produced
+  `PASS / postcondition_satisfied`; an intentionally mismatched postcondition
+  produced `FAIL / field_mismatch` with read-back evidence. A manual search of
+  generated reports found neither tested API credential. This is operator
+  validation evidence, not an inference from repository fixtures. No natural
+  false-success incident was observed. A real-target verifier outage/denied
+  read-back has not yet been exercised. The GitHub MCP template has not been
+  validated end-to-end against a real server.
 - The `test_account` label is an explicit human attestation, not an account
   sandbox. A wrongly configured server can still mutate a production account.
 - Generic HTTP 404 becomes FAIL only with explicit `missing_statuses`;
@@ -114,17 +120,12 @@ enters the runtime model-visible verdict or shape-only Outcome Guard logs.
   first full local run, then passed focused and full reruns. That timing path
   predates scan and was not changed here.
 
-## Acceptance before tag
+## Validation state after v0.1.0
 
-1. Run the complete tests, Outcome Guard demo, installed CLI smoke test, and
-   Linux/Windows CI on the final reviewed tree.
-2. Run a real target MCP write against a disposable account with a separately
-   authorized read-back. Capture PASS, a reproducible confirmed FAIL where
-   feasible, and UNKNOWN on verifier outage/denied access. Confirm no
-   uncontracted tool was called and no secret appears in either report.
-3. Review the branch diff and limitations, merge through PRs without pushing
-   to `main` directly, then create the v0.1.0 tag on the accepted commit.
-
-Before real acceptance, request only the server command/config shape, exact
-write tool names and response shapes, and a disposable account label in chat.
-The operator should set all tokens directly in local environment variables.
+The tag exists; do not move it. The hosted PASS and deliberately mismatched
+FAIL described above are operator-reported acceptance evidence. Still pending:
+one successful disposable-account write followed by an unavailable or denied
+authoritative read-back, yielding UNKNOWN; a separate end-to-end GitHub MCP
+template run if that integration is claimed; and sustained real traffic before
+any reliability or production claims. For a local target run, keep credentials
+in environment variables and review reports locally before sharing.

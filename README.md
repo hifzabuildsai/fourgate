@@ -1,12 +1,8 @@
 # Fourgate
 
-MCP is the first interception surface, not the company boundary.
-
 Fourgate catches MCP tools that say 'success' when nothing actually happened.
 
 **Status: early, pre-alpha.**
-
-MCP is the first interception surface, not the company boundary.
 
 ## Scan a disposable MCP test account (under five minutes)
 
@@ -104,6 +100,16 @@ The existing `silent_empty` behavior remains deliberately narrow. Fourgate does 
 ## Field evidence
 
 The original field run observed 24 real `tools/call` results and zero `silent_empty` events. Four observed failures happened before `tools/call` at spawn/connect/discovery/configuration. That weakens the original empty-payload wedge; it does not validate Outcome Guard. Outcome Guard now needs real shadow-mode traffic and reproducible false-success incidents.
+
+### Hosted scan validation (2026-09-30)
+
+Operator-reported validation on a disposable account: a real hosted MCP write
+returned an ID, and an independent HTTPS read-back with a separate credential
+produced `PASS / postcondition_satisfied`. An intentionally mismatched
+postcondition produced `FAIL / field_mismatch` with authoritative read-back
+evidence. A manual search of the generated reports found neither tested API
+credential. No naturally occurring false-success incident was observed. This
+single integration does not establish production reliability.
 
 ## Current limitations
 

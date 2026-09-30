@@ -76,4 +76,5 @@ This slice supports local stdio MCP servers and either the existing bounded
 command verifier or a bounded HTTP/GitHub read-back. It does **not** claim
 end-to-end GitHub MCP integration without a supplied test account. Read-back
 traffic goes to the explicitly configured endpoint; no telemetry is sent to
-Fourgate. Redacted evidence reports follow in the next milestone.
+Fourgate. The implemented JSON and single-file HTML reports include redacted
+evidence for each case.
