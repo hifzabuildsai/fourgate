@@ -1,3 +1,7 @@
+# Fourgate
+
+##MCP is the first interception surface, not the company boundary.
+
 Fourgate catches MCP tools that say 'success' when nothing actually happened.
 
 **Status: early, pre-alpha.**
