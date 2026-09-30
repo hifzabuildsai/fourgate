@@ -1,6 +1,9 @@
 # plan.md — Outcome Guard MVP
 
-Current implementation plan for the pitch-ready Fourgate wedge. This supersedes the earlier `silent_empty`-only build plan; the old classifier remains supported but is frozen unless field evidence justifies expansion.
+Historical implementation plan for the Outcome Guard MVP, now implemented.
+For the current scan architecture, validation state, and remaining limits, see
+`HANDOFF.md`. The earlier `silent_empty` classifier remains supported but is
+frozen unless field evidence justifies expansion.
 
 ## Slice
 
