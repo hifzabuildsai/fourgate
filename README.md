@@ -1,3 +1,5 @@
+# Fourgate
+
 Fourgate catches MCP tools that say 'success' when nothing actually happened.
 
 **Status: early, pre-alpha.**
