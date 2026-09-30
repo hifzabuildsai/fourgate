@@ -163,6 +163,8 @@ def evaluate(config, contract, arguments, response):
                         "readback_evidence": {"method": "GET", "url": url, "status": status, "body": document}}
             else:
                 last = {"status": "unknown", "reason_code": "readback_unconfirmed", "attempts": attempts}
+                if config["type"] == "http":
+                    last["readback_evidence"] = {"method": "GET", "status": status}
         if index + 1 < config.get("attempts", 3):
             time.sleep(min(config.get("interval_ms", 250) / 1000, max(0, deadline - time.monotonic())))
     return last

@@ -1,9 +1,8 @@
 # Fourgate engineering handoff
 
-Status: pre-alpha. Scan PRs #14–#21 are merged into `main`, and the `v0.1.0`
-tag already exists on `main`. One hosted target was tested by the operator on
-a disposable account; verifier-unavailable/unauthorized acceptance on a real
-target remains open. Do not call this production-proven.
+Status: pre-alpha. Scan PRs #14–#21 are merged, and `v0.1.0` already exists.
+The operator reports hosted target validation on a disposable account,
+including denied read-back yielding UNKNOWN. Do not call this production-proven.
 
 ## Purpose and supported path
 
@@ -96,15 +95,13 @@ enters the runtime model-visible verdict or shape-only Outcome Guard logs.
 
 ## Known limits and pending work
 
-- The operator reports one real hosted email-sending MCP write on a disposable
-  account. A separate read-back credential and authoritative HTTPS GET produced
-  `PASS / postcondition_satisfied`; an intentionally mismatched postcondition
-  produced `FAIL / field_mismatch` with read-back evidence. A manual search of
-  generated reports found neither tested API credential. This is operator
-  validation evidence, not an inference from repository fixtures. No natural
-  false-success incident was observed. A real-target verifier outage/denied
-  read-back has not yet been exercised. The GitHub MCP template has not been
-  validated end-to-end against a real server.
+- The operator reports a hosted email-sending MCP test on a disposable account:
+  an independently verified healthy write returned `PASS / postcondition_satisfied`,
+  and a deliberately mismatched postcondition returned `FAIL / field_mismatch`.
+  A successful write followed by a deliberately invalid independent read-back
+  credential returned `UNKNOWN / readback_unconfirmed` after three GET attempts.
+  These are operator-provided validation results, not a naturally occurring
+  false-success incident. The GitHub MCP template has not been run end-to-end.
 - The `test_account` label is an explicit human attestation, not an account
   sandbox. A wrongly configured server can still mutate a production account.
 - Generic HTTP 404 becomes FAIL only with explicit `missing_statuses`;
@@ -122,10 +119,10 @@ enters the runtime model-visible verdict or shape-only Outcome Guard logs.
 
 ## Validation state after v0.1.0
 
-The tag exists; do not move it. The hosted PASS and deliberately mismatched
-FAIL described above are operator-reported acceptance evidence. Still pending:
-one successful disposable-account write followed by an unavailable or denied
-authoritative read-back, yielding UNKNOWN; a separate end-to-end GitHub MCP
-template run if that integration is claimed; and sustained real traffic before
-any reliability or production claims. For a local target run, keep credentials
-in environment variables and review reports locally before sharing.
+The operator-reported hosted PASS, deliberate mismatch FAIL, and denied
+read-back UNKNOWN above complete the three real-target verdict cases. The
+UNKNOWN response status was not present in the generated report before this
+change; verify that field on a future authorized target run. The tag must not
+be moved. No natural false-success incident or sustained production traffic
+has been observed. Review local reports before sharing; credentials belong in
+local environment variables, not contracts or chat.

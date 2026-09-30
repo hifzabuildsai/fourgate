@@ -7,6 +7,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
+
 from fourgate import readback
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -14,7 +16,7 @@ DEMO = ROOT / "fixtures" / "contracts" / "scan_demo.json"
 
 
 def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None, token_value=None,
-         without_record_id=False, subject_values=None, report_dir=None):
+         without_record_id=False, subject_values=None, report_dir=None, missing_statuses=None):
     store = tmp_path / "store.json"
     calls = []
 
@@ -49,7 +51,8 @@ def _run(tmp_path, mode, status, delayed=0, token_env=None, server_command=None,
                                     "record_id_field": "issue_id"}
         case["readback"] = {
             "type": "http", "url_template": f"http://127.0.0.1:{httpd.server_port}/issues/{{issue_id}}",
-            "expected_fields": {"title": "title"}, "missing_statuses": [404],
+            "expected_fields": {"title": "title"},
+            "missing_statuses": [404] if missing_statuses is None else missing_statuses,
             "attempts": 3, "interval_ms": 10, "timeout_ms": 1000,
         }
         if subject_values:
@@ -129,6 +132,26 @@ def test_auth_failure_is_unknown(tmp_path):
     result, row, _ = _run(tmp_path, "broken", 401)
     assert result.returncode == 1
     assert row["status"] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("http_status", [401, 404, 503])
+def test_unconfirmed_http_status_reaches_json_and_html_reports(tmp_path, http_status):
+    reports = tmp_path / "reports"
+    test_token = "local-fake-readback-token"
+    result, row, calls = _run(tmp_path, "healthy", http_status, report_dir=reports,
+                              missing_statuses=[], token_env="FOURGATE_READ_TEST_TOKEN",
+                              token_value=test_token)
+    assert result.returncode == 1
+    assert (row["status"], row["reason_code"], row["attempts"]) == (
+        "UNKNOWN", "readback_unconfirmed", 3)
+    assert row["evidence"]["readback"] == {"method": "GET", "status": http_status}
+    assert len(calls) == 3
+    json_payload = (reports / "fourgate-report.json").read_text()
+    on_disk = json.loads(json_payload)["cases"][0]
+    assert on_disk["evidence"]["readback"] == {"method": "GET", "status": http_status}
+    page = (reports / "fourgate-report.html").read_text()
+    assert f'&quot;status&quot;: {http_status}' in page
+    assert test_token not in json_payload and test_token not in page
 
 
 def test_success_without_record_id_is_unknown_and_skips_http_readback(tmp_path):

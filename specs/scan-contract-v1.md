@@ -61,6 +61,13 @@ For `readback`, use:
   The read-back sends GET requests only and never retries the write. HTTP
   redirects are rejected so a token cannot follow one to another host.
 
+For generic HTTP read-back, `UNKNOWN / readback_unconfirmed` after an HTTP
+response includes `evidence.readback.method: "GET"` and the last observed
+`evidence.readback.status` integer in the redacted JSON and HTML reports. This
+structural evidence does not include response headers, authorization, URL, or
+body. A denied response or unconfigured missing status remains UNKNOWN;
+reporting its status does not change the verdict.
+
 The scanner validates every case before launching the MCP server. It initializes
 and lists tools, then calls only contracted names discovered on that server.
 Verifier PASS maps to `PASS`, confirmed postcondition failure to `FAIL`, and
