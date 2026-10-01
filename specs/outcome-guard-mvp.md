@@ -54,6 +54,7 @@ Rules:
 4. `reason_code` must be pre-approved in `allowed_failure_reasons`. Any other verifier output is `unknown` and fails open.
 5. `timeout_ms` is mandatory, per contract, and capped by Fourgate. Outcome verification is I/O and does not inherit the legacy 100 ms pure-classifier budget. The legacy `silent_empty` classifier keeps its existing 100 ms budget.
 6. Contract files are trusted operator configuration. An LLM may draft them, but a human must approve them before runtime use.
+7. Optional `verifier.secret_env` lists environment variable names for verifier-only credentials. The wrapper removes them (case-insensitively on Windows) from the wrapped server's environment; the verifier still receives them. Any entry that is not a valid env var name rejects the contract file.
 
 ## Runtime behavior
 

@@ -226,9 +226,20 @@ def _pump_responses(read_fd,write_fd,tracker,loaded_baseline,server_label,observ
         if on_eof is not None: on_eof()
 
 
+def _server_env(secret_names):
+    """Wrapped-server environment without verifier-only secrets; None inherits unchanged."""
+    if not secret_names: return None
+    # Windows env names are case-insensitive, so withhold every casing there.
+    fold=(lambda name: name.upper()) if os.name=="nt" else (lambda name: name)
+    withheld={fold(name) for name in secret_names}
+    return {k:v for k,v in os.environ.items() if fold(k) not in withheld}
+
+
 def run_proxy(target_cmd,loaded_baseline=None,server_label=DEFAULT_SERVER_LABEL,observe_path=None,
               outcome_contracts=None,outcome_mode="shadow",outcome_log_path=None):
-    proc=subprocess.Popen(target_cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,bufsize=0)
+    # The verifier subprocess still receives the full environment (outcome.evaluate).
+    server_env=_server_env(outcome.secret_env_names(outcome_contracts))
+    proc=subprocess.Popen(target_cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,bufsize=0,env=server_env)
     tracker=CallTracker()
     t1=threading.Thread(target=_pump,args=(0,proc.stdin),kwargs={"on_eof":lambda:_close_quietly(proc.stdin),"on_line":tracker.track_request},daemon=True)
     t2=threading.Thread(target=_pump_responses,args=(proc.stdout.fileno(),1,tracker,loaded_baseline,server_label),

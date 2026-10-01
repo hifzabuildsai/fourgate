@@ -116,11 +116,15 @@ loopback server only; it has not yet been run against the hosted connector.
    the exact tool name and copy `extract` from the scan case's
    `outcome_contract`. Set `verifier` to
    `{"command": ["{python}", "-m", "fourgate.verify_http", "readback.json"],
-   "cwd": ".", "timeout_ms": 2000}`, `allowed_failure_reasons` to
+   "cwd": ".", "timeout_ms": 2000, "secret_env": ["<token_env name>"]}`,
+   `allowed_failure_reasons` to
    `["field_mismatch"]` plus `"record_missing"` only if `missing_statuses` is
    configured, and `recovery` to `"stop"`. `cwd` is relative to the contract
    file. `{python}` is the interpreter running `wrap.py`; install Fourgate in
-   it (`pip install .`). `record_id_field` is a scan-only key: at runtime a
+   it (`pip install .`). `secret_env` lists the read credential's env var
+   names: `wrap.py` removes them from the wrapped connector's environment
+   while the verifier still receives them, matching `fourgate scan`'s
+   credential separation. `record_id_field` is a scan-only key: at runtime a
    result without the ID fails extraction and is UNKNOWN.
 3. Dry-run the verifier without any write, from the contract directory, against
    a record the read credential can already fetch. Expect exit 0 and PASS, then
@@ -141,7 +145,10 @@ loopback server only; it has not yet been run against the hosted connector.
    ```
 
    The read token env var named by `token_env` must be set where the client
-   launches the wrapper. Do not use `--outcome-mode enforce`.
+   launches the wrapper. Do not use `--outcome-mode enforce`. Check the
+   wrapper's stderr at startup: if it reports `outcome guard disabled` (for
+   example an invalid `secret_env` entry), no verification runs and no
+   variables are withheld, so stop and fix the contract before any write.
 5. Drive one agent-initiated protected call on the disposable account. Shadow
    mode leaves the client-visible bytes unchanged. Each protected call
    appends one shape-only line to `outcomes.jsonl`: `status`, `reason_code`,
@@ -153,11 +160,6 @@ loopback server only; it has not yet been run against the hosted connector.
 6. Do not retry an ambiguous write. Review `outcomes.jsonl` before sharing,
    and do not commit runtime contracts that contain record IDs or account
    identifiers.
-
-Credential limit: `wrap.py` passes its full environment to the wrapped
-connector, so unlike `fourgate scan` the read token is visible to the
-connector process. Use a read credential whose exposure to that process is
-acceptable.
 
 ## Known limits and pending work
 
