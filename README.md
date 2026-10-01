@@ -126,7 +126,7 @@ fourgate doctor --contracts path/to/contracts.json --log outcomes.jsonl -- pytho
 
 `doctor` takes the same arguments as `guard` and checks the setup before you wrap a real server: the contracts, each verifier (for the bundled `fourgate.verify_http`, its read-back config, URL rules, budget and failure reasons), that credential variables are set and withheld from the server, the outcome log location, and, when a server command follows `--`, that the server answers `initialize` and `tools/list` and advertises every protected tool. It exits 0 when the setup is ready for shadow mode, 1 when it is not, and 2 on a usage error.
 
-It never sends `tools/call`, never runs a verifier, never makes a network request, and never creates or modifies a file. It therefore cannot confirm that the read credential is valid or read-only, or that the read-back endpoint is reachable.
+It never sends `tools/call`, never runs a verifier, never makes a network request, and never creates or modifies a file. It therefore cannot confirm that the read credential is valid or read-only, or that the read-back endpoint is reachable. When a server command is given, the server is started only for `initialize` and `tools/list`; anything the server does on its own at start-up is outside Fourgate's control.
 
 ### Wrap a local stdio server
 

@@ -25,7 +25,9 @@ DESCRIPTION = ("Check a fourgate guard setup without side effects: no tools/call
                "the MCP handshake and tool discovery.")
 PROTOCOL = "2024-11-05"
 STARTUP_HEADROOM_MS = 300
-TAGS = {"OK": "[ OK ]", "WARN": "[WARN]", "FAIL": "[FAIL]", "SKIP": "[SKIP]"}
+# INFO lines are statements, not checks: they never affect the verdict.
+TAGS = {"OK": "[ OK ]", "WARN": "[WARN]", "FAIL": "[FAIL]", "SKIP": "[SKIP]", "INFO": "[INFO]"}
+VERIFY_HTTP_USAGE = "verify_http command must be: {python} -m fourgate.verify_http <readback-config.json>"
 LATER_SECTIONS = ("Verifiers", "Credentials", "MCP server", "Mode and log", "Write safety")
 
 
@@ -81,8 +83,12 @@ def main(argv):
         _check_write_safety(report, configs)
 
     report.line()
-    report.line("No tools/call was sent. No verifier was run. No network request was made. No file was written.")
-    report.line("Server started for handshake only, then stopped." if started else "Server not started.")
+    report.line("Fourgate sent no tools/call, ran no verifier, made no network request and wrote no file.")
+    if started:
+        report.line("The server was started only for initialize and tools/list, then stopped. Anything the server "
+                    "does on its own at start-up is outside Fourgate's control.")
+    else:
+        report.line("The server was not started.")
     if report.counts["FAIL"]:
         report.line(f"Verdict: NOT READY: {report.counts['FAIL']} problem(s)")
         return 1
@@ -96,6 +102,11 @@ def verify_http_config_arg(command):
         if command[index] == "-m" and command[index + 1] == "fourgate.verify_http":
             return command[index + 2] if len(command) == index + 3 else None
     return None
+
+
+def invokes_verify_http(command):
+    """True if the command runs `-m fourgate.verify_http`, well-formed or not."""
+    return any(command[i] == "-m" and command[i + 1] == "fourgate.verify_http" for i in range(len(command) - 1))
 
 
 def _verifier_cwd(contracts, verifier):
@@ -116,7 +127,10 @@ def _check_verifiers(report, contracts):
         report.section(f"Verifier: {tool}")
         config_arg = verify_http_config_arg(verifier["command"])
         if config_arg is None:
-            _check_custom(report, verifier, cwd)
+            if invokes_verify_http(verifier["command"]):
+                report.add("FAIL", VERIFY_HTTP_USAGE)
+            else:
+                _check_custom(report, verifier, cwd)
             continue
         try:
             config = verify_http.load_config(os.path.join(cwd, config_arg), contract["extract"])
@@ -139,8 +153,15 @@ def _check_verifiers(report, contracts):
 
 
 def _check_custom(report, verifier, cwd):
-    executable = verifier["command"][0]
-    if executable == "{python}":
+    command = verifier["command"]
+    executable = command[0]
+    if executable == "{python}" and len(command) > 1 and not command[1].startswith("-"):
+        script = os.path.basename(command[1])
+        if os.path.exists(os.path.join(cwd, command[1])):
+            report.add("OK", f"verifier script found: {script}")
+        else:
+            report.add("FAIL", f"verifier script not found: {script}")
+    elif executable == "{python}":
         report.add("OK", "verifier executable: {python} (the interpreter running Fourgate)")
     elif shutil.which(executable) or os.path.exists(os.path.join(cwd, executable)):
         report.add("OK", f"verifier executable found: {os.path.basename(executable)}")
@@ -209,9 +230,9 @@ def _check_credentials(report, tools, configs):
                 report.add("OK", f"{tool}: {name} is withheld from the MCP server")
             else:
                 report.add("WARN", f"{tool}: {name} is visible to the MCP server (add it to secret_env)")
-    report.add("OK", "Fourgate cannot verify the read credential is read-only or valid "
+    report.add("INFO", "Fourgate cannot verify the read credential is read-only or valid "
                      "(doctor makes no network requests)")
-    report.add("OK", "the verifier process inherits the full environment, including the server's own credentials")
+    report.add("INFO", "the verifier process inherits the full environment, including the server's own credentials")
 
 
 def _check_server(report, contracts, target):

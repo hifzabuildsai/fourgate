@@ -25,6 +25,10 @@ TOKEN_ENV = "FOURGATE_DOCTOR_TEST_READ_TOKEN"
 SECRET = "doctor-secret-sentinel-4b7e"
 ARG_SENTINEL = "doctor-arg-sentinel-c21f"
 RUN_TIMEOUT = 60
+FOOTER_NO_SIDE_EFFECTS = "Fourgate sent no tools/call, ran no verifier, made no network request and wrote no file."
+FOOTER_STARTED = ("The server was started only for initialize and tools/list, then stopped. "
+                  "Anything the server does on its own at start-up is outside Fourgate's control.")
+FOOTER_NOT_STARTED = "The server was not started."
 READBACK = {
     "type": "http",
     "url_template": "https://api.example.test/issues/{issue_id}",
@@ -64,6 +68,12 @@ def _custom(command):
         verifier = data["tools"]["create_issue"]["verifier"]
         verifier["command"] = command
         del verifier["cwd"], verifier["secret_env"]
+    return edit
+
+
+def _verifier(**changes):
+    def edit(data):
+        data["tools"]["create_issue"]["verifier"].update(changes)
     return edit
 
 
@@ -133,8 +143,7 @@ def test_happy_path_verify_http_is_ready_for_shadow(tmp_path, env, capsys):
                      f"[ OK ] create_issue: {TOKEN_ENV} is withheld from the MCP server",
                      "[ OK ] create_issue is advertised by the server",
                      "[ OK ] create_issue: read-back retries are GET only (attempts: 3)",
-                     "No tools/call was sent. No verifier was run. No network request was made. No file was written.",
-                     "Server started for handshake only, then stopped."):
+                     FOOTER_NO_SIDE_EFFECTS, FOOTER_STARTED):
         assert expected in out
     assert err == ""
     assert _snapshot(tmp_path) == before  # nothing created, truncated or modified
@@ -270,10 +279,36 @@ def _fail_custom_verifier_missing(tmp_path, monkeypatch):
             "[FAIL] verifier executable not found: fourgate-no-such-verifier")
 
 
+def _demo_with_script(tmp_path, script):
+    data = json.loads(DEMO_CONTRACTS.read_text(encoding="utf-8"))
+    data["tools"]["create_issue"]["verifier"].update(command=["{python}", script], cwd=str(ROOT))
+    path = tmp_path / "runtime.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def _fail_verifier_script_missing(tmp_path, monkeypatch):
+    return (["--contracts", _demo_with_script(tmp_path, "fixtures/no_such_verifier.py")],
+            "[FAIL] verifier script not found: no_such_verifier.py")
+
+
+def _fail_verify_http_no_argument(tmp_path, monkeypatch):
+    return (["--contracts", _setup(tmp_path, edit=_verifier(command=["{python}", "-m", "fourgate.verify_http"]))],
+            "[FAIL] verify_http command must be: {python} -m fourgate.verify_http <readback-config.json>")
+
+
+def _fail_verify_http_two_arguments(tmp_path, monkeypatch):
+    command = ["{python}", "-m", "fourgate.verify_http", "readback.json", "extra.json"]
+    return (["--contracts", _setup(tmp_path, edit=_verifier(command=command))],
+            "[FAIL] verify_http command must be: {python} -m fourgate.verify_http <readback-config.json>")
+
+
 @pytest.mark.parametrize("case", [_fail_invalid_contract, _fail_readback_missing, _fail_readback_http_remote,
                                   _fail_readback_dynamic_host, _fail_secret_unset, _fail_secret_empty,
                                   _fail_tool_not_discovered, _fail_server_not_found, _fail_log_parent_missing,
-                                  _fail_custom_verifier_missing], ids=lambda case: case.__name__[6:])
+                                  _fail_custom_verifier_missing, _fail_verifier_script_missing,
+                                  _fail_verify_http_no_argument, _fail_verify_http_two_arguments],
+                         ids=lambda case: case.__name__[6:])
 def test_fail_cases_are_not_ready(tmp_path, env, capsys, case):
     args, expected = case(tmp_path, env)
     rc, out, _ = _doctor(capsys, *args)
@@ -289,7 +324,7 @@ def test_invalid_contract_skips_every_later_check(tmp_path, capsys):
     rc, out, _ = _doctor(capsys, *args)
     assert rc == 1
     assert out.count("[SKIP] contract is invalid") == len(doctor.LATER_SECTIONS)
-    assert "Server not started." in out
+    assert FOOTER_NOT_STARTED in out
     assert "Verdict: NOT READY: 1 problem(s)" in out
 
 
@@ -298,12 +333,6 @@ def test_invalid_contract_skips_every_later_check(tmp_path, capsys):
 def _allow(*reasons):
     def edit(data):
         data["tools"]["create_issue"]["allowed_failure_reasons"] = list(reasons)
-    return edit
-
-
-def _verifier(**changes):
-    def edit(data):
-        data["tools"]["create_issue"]["verifier"].update(changes)
     return edit
 
 
@@ -351,6 +380,43 @@ def test_warn_cases_are_still_ready_for_shadow(tmp_path, env, capsys, build, exp
     assert "ready for enforce" not in out.lower()
 
 
+def test_malformed_verify_http_command_skips_custom_checks(tmp_path, env, capsys):
+    contracts = _setup(tmp_path, edit=_verifier(command=["{python}", "-m", "fourgate.verify_http"]))
+    rc, out, _ = _doctor(capsys, "--contracts", contracts, "--log", tmp_path / "o.jsonl")
+    assert rc == 1
+    assert "custom verifier:" not in out and "verifier executable" not in out
+    assert "Verdict: NOT READY: 1 problem(s)" in out
+
+
+def test_demo_fixture_is_ready_and_its_script_is_found(capsys):
+    rc, out, _ = _doctor(capsys, "--contracts", DEMO_CONTRACTS, "--", *_server())
+    assert rc == 0, out
+    assert "[ OK ] verifier script found: outcome_verifier.py" in out
+    assert "Verdict: READY FOR SHADOW (2 warning(s))" in out
+
+
+def test_footer_states_whether_the_server_was_started(tmp_path, capsys):
+    rc, out, _ = _doctor(capsys, "--contracts", DEMO_CONTRACTS, "--", *_server())
+    assert rc == 0, out
+    assert out.rstrip().splitlines()[-3:-1] == [FOOTER_NO_SIDE_EFFECTS, FOOTER_STARTED]
+    assert FOOTER_NOT_STARTED not in out
+    rc, out, _ = _doctor(capsys, "--contracts", DEMO_CONTRACTS)
+    assert rc == 0, out
+    assert out.rstrip().splitlines()[-3:-1] == [FOOTER_NO_SIDE_EFFECTS, FOOTER_NOT_STARTED]
+    assert "started only for initialize" not in out
+
+
+def test_info_lines_are_not_counted(tmp_path, env, capsys):
+    rc, out, _ = _doctor(capsys, "--contracts", _setup(tmp_path, edit=_verifier(secret_env=[])), "--mode", "enforce")
+    assert rc == 0, out
+    assert "[INFO] Fourgate cannot verify the read credential is read-only or valid" in out
+    assert "[INFO] the verifier process inherits the full environment" in out
+    assert "[ OK ] Fourgate cannot verify" not in out and "[WARN] Fourgate cannot verify" not in out
+    warnings = out.count("[WARN]")
+    assert warnings == 3  # credential visible to the server, enforce, no --log
+    assert f"Verdict: READY FOR SHADOW ({warnings} warning(s))" in out
+
+
 def test_loopback_http_is_reported(tmp_path, env, capsys):
     config = dict(READBACK, url_template="http://127.0.0.1:8080/issues/{issue_id}")
     rc, out, _ = _doctor(capsys, "--contracts", _setup(tmp_path, config))
@@ -364,6 +430,10 @@ def test_verify_http_detection():
     assert doctor.verify_http_config_arg(["{python}", "-m", "fourgate.verify_http"]) is None
     assert doctor.verify_http_config_arg(["{python}", "-m", "other.module", "rb.json"]) is None
     assert doctor.verify_http_config_arg(["{python}", "fourgate/verify_http.py", "rb.json"]) is None
+    assert doctor.invokes_verify_http(["{python}", "-m", "fourgate.verify_http"])
+    assert doctor.invokes_verify_http(["python3", "-m", "fourgate.verify_http", "a", "b"])
+    assert not doctor.invokes_verify_http(["{python}", "fourgate/verify_http.py", "rb.json"])
+    assert not doctor.invokes_verify_http(["{python}", "-m"])
 
 
 # --- SKIP, usage, output -------------------------------------------------------
@@ -373,7 +443,7 @@ def test_without_server_command_mcp_checks_skip(tmp_path, env, capsys):
     assert rc == 0, out
     assert "[SKIP] pass the server command after -- to check the handshake and tool discovery" in out
     assert "target: none" in out
-    assert "Server not started." in out
+    assert FOOTER_NOT_STARTED in out
 
 
 @pytest.mark.parametrize("args", [
