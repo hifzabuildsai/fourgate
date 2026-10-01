@@ -121,6 +121,11 @@ def evaluate(config, contract, arguments, response):
     extracted, error = outcome._extract(contract, arguments, response)
     if error:
         return {"status": "unknown", "reason_code": error, "attempts": 0}
+    return evaluate_extracted(config, extracted)
+
+
+def evaluate_extracted(config, extracted):
+    """Read back already-extracted fields; shared by scan and the runtime verifier."""
     token_env = config.get("token_env")
     token = os.environ.get(token_env) if token_env else None
     if token_env and not token:

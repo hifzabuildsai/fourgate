@@ -93,6 +93,72 @@ typed stdout protocol. A verifier may return an `evidence` object on FAIL;
 that object is available to the local scan report after redaction but never
 enters the runtime model-visible verdict or shape-only Outcome Guard logs.
 
+## Shadow mode with a real connector
+
+`python -m fourgate.verify_http <readback.json>` is a runtime Outcome Guard
+verifier command. It reads the contract's extracted fields from stdin and runs
+the same `fourgate/readback.py` validation, URL construction, and bounded GET
+as `fourgate scan`. A confirmed result prints `{"status":"pass"}` or
+`{"status":"fail","reason_code":"field_mismatch"|"record_missing",...}` with
+structural evidence only (method, status, attempts, response paths). Any
+uncertainty (401/403, an unconfigured status, timeout, missing credential,
+invalid config or input) prints nothing and exits nonzero, which `wrap.py`
+records as UNKNOWN (`verifier_error`). This has been tested against a
+loopback server only; it has not yet been run against the hosted connector.
+
+1. Start from a scan case that already returned PASS on the disposable
+   account. Copy its `readback` object unchanged into `readback.json`, except
+   set `timeout_ms` to at most 1500. The runtime caps the whole verifier
+   process at 2000 ms, `verify_http` rejects a larger read-back budget, and
+   interpreter startup needs the remainder. Keep `attempts × interval_ms`
+   inside that budget.
+2. Write a runtime contract file (`contract_version: 1`). Under `tools`, key
+   the exact tool name and copy `extract` from the scan case's
+   `outcome_contract`. Set `verifier` to
+   `{"command": ["{python}", "-m", "fourgate.verify_http", "readback.json"],
+   "cwd": ".", "timeout_ms": 2000}`, `allowed_failure_reasons` to
+   `["field_mismatch"]` plus `"record_missing"` only if `missing_statuses` is
+   configured, and `recovery` to `"stop"`. `cwd` is relative to the contract
+   file. `{python}` is the interpreter running `wrap.py`; install Fourgate in
+   it (`pip install .`). `record_id_field` is a scan-only key: at runtime a
+   result without the ID fails extraction and is UNKNOWN.
+3. Dry-run the verifier without any write, from the contract directory, against
+   a record the read credential can already fetch. Expect exit 0 and PASS, then
+   change one expected value for exit 0 and `field_mismatch`:
+
+   ```bash
+   echo '{"issue_id": "<known test record>", "title": "<persisted value>"}' | python -m fourgate.verify_http readback.json
+   ```
+
+   The verifier's stderr names the reason for any nonzero exit, e.g.
+   `unknown (readback_unconfirmed, attempts 3, GET status 401)`. `wrap.py`
+   discards verifier stderr, so use this dry run to diagnose UNKNOWN.
+4. Point the agent client's MCP server entry at the wrapper, always in shadow
+   mode:
+
+   ```bash
+   python wrap/wrap.py --outcome-contracts runtime-contract.json --outcome-mode shadow --outcome-log outcomes.jsonl --server-label <label> -- <original server command>
+   ```
+
+   The read token env var named by `token_env` must be set where the client
+   launches the wrapper. Do not use `--outcome-mode enforce`.
+5. Drive one agent-initiated protected call on the disposable account. Shadow
+   mode leaves the client-visible bytes unchanged. Each protected call
+   appends one shape-only line to `outcomes.jsonl`: `status`, `reason_code`,
+   and extracted field names, never values. Expected: `pass /
+   postcondition_satisfied` for a healthy write. `unknown / verifier_error`
+   means the dry run in step 3 will show the cause; `unknown /
+   verifier_timeout` means the 2000 ms budget was exceeded;
+   `unknown / verifier_malformed` means a reason code is not allowed.
+6. Do not retry an ambiguous write. Review `outcomes.jsonl` before sharing,
+   and do not commit runtime contracts that contain record IDs or account
+   identifiers.
+
+Credential limit: `wrap.py` passes its full environment to the wrapped
+connector, so unlike `fourgate scan` the read token is visible to the
+connector process. Use a read credential whose exposure to that process is
+acceptable.
+
 ## Known limits and pending work
 
 - The operator reports a hosted email-sending MCP test on a disposable account:
