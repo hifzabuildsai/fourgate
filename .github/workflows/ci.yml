@@ -11,7 +11,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.13"
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -21,7 +29,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
 
       - name: Install dependencies
         run: python -m pip install ".[dev]"
@@ -55,6 +63,90 @@ jobs:
 
       - name: Run runtime self-check
         run: python wrap/wrap.py --selfcheck
+
+  package:
+    # Builds the wheel and sdist, then installs the wheel into a fresh venv
+    # outside the checkout so nothing is imported from the source tree.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: Check wheel contents
+        run: |
+          python - <<'EOF'
+          import pathlib, zipfile
+          wheels = list(pathlib.Path("dist").glob("fourgate-*.whl"))
+          assert len(wheels) == 1, wheels
+          assert len(list(pathlib.Path("dist").glob("fourgate-*.tar.gz"))) == 1
+          names = set(zipfile.ZipFile(wheels[0]).namelist())
+          for required in ("fourgate/demo/server.py", "fourgate/demo/verifier.py"):
+              assert required in names, f"{required} missing from {wheels[0].name}"
+          print(f"{wheels[0].name}: {len(names)} files, demo server and verifier present")
+          EOF
+
+      - name: Install the wheel in a fresh venv and smoke-test
+        run: |
+          python - <<'EOF'
+          import os, pathlib, subprocess, sys
+          wheel = next(pathlib.Path("dist").glob("fourgate-*.whl")).resolve()
+          tmp = pathlib.Path(os.environ["RUNNER_TEMP"]) / "fourgate-smoke"
+          tmp.mkdir()
+          subprocess.run([sys.executable, "-m", "venv", str(tmp / "venv")], check=True)
+          scripts = tmp / "venv" / ("Scripts" if os.name == "nt" else "bin")
+          exe = ".exe" if os.name == "nt" else ""
+          python, fourgate = str(scripts / f"python{exe}"), str(scripts / f"fourgate{exe}")
+          # The venv comes first on PATH, so "python" below is the venv's interpreter.
+          env = {**os.environ, "PATH": str(scripts) + os.pathsep + os.environ["PATH"],
+                 "FOURGATE_SMOKE_READ_TOKEN": "smoke-token-not-a-secret"}
+
+          def run(*argv, **kwargs):
+              print("+", " ".join(argv), flush=True)
+              return subprocess.run(argv, cwd=tmp, env=env, stdin=subprocess.DEVNULL, check=True, **kwargs)
+
+          run(python, "-m", "pip", "install", str(wheel))
+          out = run(fourgate, "--version", capture_output=True, text=True).stdout
+          print(out, end="")
+          version = wheel.name.split("-")[1]
+          assert out.splitlines() == [f"fourgate {version}"], out
+          run(fourgate, "demo", "--out", str(tmp / "d"))
+          assert (tmp / "d" / "fourgate-demo-summary.html").is_file()
+          run(fourgate, "init", "--tool", "create_issue", "--test-account", "disposable-demo",
+              "--id-path", "result.structuredContent.issue_id",
+              "--readback-url", "https://api.example.test/issues/{record_id}",
+              "--expect", "title=title", "--arg", "title=FOURGATE-SCAN-TEST",
+              "--token-env", "FOURGATE_SMOKE_READ_TOKEN", "--dir", str(tmp / "c"),
+              "--", "python", "-m", "fourgate.demo.server")
+          run(fourgate, "doctor", "--contracts", str(tmp / "c" / "runtime.json"), "--log", str(tmp / "o.jsonl"),
+              "--", "python", "-m", "fourgate.demo.server")
+          EOF
+
+      - name: Upload dist
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fourgate-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
 
   ci-scan-template:
     # Runs the steps of examples/ci/fourgate-scan.yml against the bundled demo

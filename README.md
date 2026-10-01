@@ -28,11 +28,16 @@ Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is sto
 
 ## Scan a disposable MCP test account (under five minutes)
 
-Python 3.10+. Install the v0.2.0 release:
+Python 3.10–3.13, Linux or Windows. Install the v0.3.0 release:
 
 ```bash
-python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.2.0"
+python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.3.0"
 ```
+
+The built wheel is also attached to the
+[v0.3.0 GitHub Release](https://github.com/hifzabuildsai/fourgate/releases/tag/v0.3.0)
+(`python -m pip install fourgate-0.3.0-py3-none-any.whl`). Fourgate is not on
+PyPI yet. Check the install with `fourgate --version`.
 
 Or, from a clean checkout of this repository (the bundled fixture below needs
 the checkout):
@@ -40,6 +45,19 @@ the checkout):
 ```bash
 python -m pip install .
 ```
+
+The product flow on one screen:
+
+```text
+fourgate demo      # see it work: local, simulated, no keys, no network
+fourgate init      # write scan, runtime and read-back configs for one write tool
+fourgate doctor    # check the setup without side effects
+fourgate scan      # contracted writes against a disposable test account
+fourgate guard     # wrap the server at runtime (shadow first, then enforce)
+fourgate summary   # turn outcomes.jsonl into a local HTML page
+```
+
+Each step is described below.
 
 For the bundled **local fixture only**, set a disposable store location and
 scan its deliberately broken issue creation. Bash:

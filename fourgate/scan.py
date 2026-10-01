@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from wrap import launch, outcome
-from . import readback
+from . import __version__, readback
 
 MAX_CALL_TIMEOUT_MS = 10000
 MAX_STDOUT_LINE = 2 * 1024 * 1024
@@ -130,7 +130,7 @@ class StdioClient:
     def initialize(self, protocol):
         _, response = self.request("initialize", {
             "protocolVersion": protocol, "capabilities": {},
-            "clientInfo": {"name": "fourgate-scan", "version": "0.2.0"},
+            "clientInfo": {"name": "fourgate-scan", "version": __version__},
         }, 5000)
         if "error" in response or not isinstance(response.get("result"), dict):
             raise RuntimeError("initialize failed")

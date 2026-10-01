@@ -4,19 +4,36 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fourgate"
-version = "0.2.0"
-description = "Contracted MCP connector outcome scans"
+dynamic = ["version"]
+description = "Independent outcome verification for consequential AI-agent actions"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 authors = [{name = "Hifza Zafar"}]
+keywords = ["mcp", "ai-agents", "verification"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/hifzabuildsai/fourgate"
+Source = "https://github.com/hifzabuildsai/fourgate"
+Issues = "https://github.com/hifzabuildsai/fourgate/issues"
 
 [project.scripts]
 fourgate = "fourgate.cli:main"
 
 [tool.setuptools]
 packages = ["fourgate", "fourgate.demo", "wrap"]
+
+[tool.setuptools.dynamic]
+version = {attr = "fourgate.__version__"}
 
 [project.optional-dependencies]
 dev = ["pytest", "mcp==1.9.4"]
