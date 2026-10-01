@@ -29,11 +29,12 @@ def _server_label(value):
     return value
 
 
-def build_parser():
-    parser = argparse.ArgumentParser(
-        prog="fourgate guard", usage=USAGE, allow_abbrev=False,
-        description="Run a local stdio MCP server behind the runtime Outcome Guard. "
-                    "Everything after the first -- is the server command, passed through verbatim.")
+DESCRIPTION = ("Run a local stdio MCP server behind the runtime Outcome Guard. "
+               "Everything after the first -- is the server command, passed through verbatim.")
+
+
+def build_parser(prog="fourgate guard", usage=USAGE, description=DESCRIPTION):
+    parser = argparse.ArgumentParser(prog=prog, usage=usage, allow_abbrev=False, description=description)
     parser.add_argument("--contracts", required=True, metavar="PATH", help="Runtime outcome contracts JSON")
     parser.add_argument("--mode", choices=("shadow", "enforce"), default="shadow",
                         help="shadow (default) records outcomes only; enforce prepends a verdict on confirmed FAIL")
@@ -44,14 +45,17 @@ def build_parser():
     return parser
 
 
-def main(argv):
-    parser = build_parser()
-    # Split on the first "--" ourselves: every later token belongs to the server.
+def split_argv(argv):
+    """Split on the first "--": every later token belongs to the server (None when absent)."""
     if "--" in argv:
         split = argv.index("--")
-        own, target = argv[:split], argv[split + 1:]
-    else:
-        own, target = argv, None
+        return argv[:split], argv[split + 1:]
+    return argv, None
+
+
+def main(argv):
+    parser = build_parser()
+    own, target = split_argv(argv)
     args = parser.parse_args(own)
     if target is None:
         parser.error("missing '--' before the server command")
