@@ -89,7 +89,8 @@ your MCP client back at the original server command, and delete these files.
 2. **Contracts:** we write the contracts with you; you review and approve them.
 3. **Test account scan:** run `fourgate scan` against a disposable account to
    prove each contract (healthy write = PASS, deliberate mismatch = FAIL).
-4. **Shadow run:** wrap the server for your real agent traffic in shadow mode.
+4. **Shadow run:** run `fourgate doctor` with the same arguments first, then
+   wrap the server for your real agent traffic in shadow mode.
 5. **Review:** `fourgate summary outcomes.jsonl` turns the log into one page.
    You choose whether to share it with us.
 
