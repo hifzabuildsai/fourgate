@@ -4,25 +4,26 @@ Fourgate catches MCP tools that say 'success' when nothing actually happened.
 
 **Status: early, pre-alpha.**
 
-## Results so far (2026-10-01)
+AI agents report actions as done without proving that the real-world change
+happened. Fourgate checks: for each contracted write, it reads the record back
+from the system of record with a separate credential and returns PASS, FAIL or
+UNKNOWN. No LLM makes that decision. MCP servers over stdio are the first
+supported surface.
 
-Tested against 4 official vendor MCP servers from 4 companies (run locally over
-stdio against the vendors' live APIs), using disposable test accounts or
-deliberately invalid credentials so no real data could be changed.
+## Results so far (2026-10-01)
 
 | Check | Result |
 |---|---|
-| Servers where a write tool returned an API failure as a successful tool result (no `isError`) | **3 of 4**, each reproduced at least twice, reported upstream |
-| Healthy write verified by independent read-back | 1 server: PASS, with FAIL and UNKNOWN controls behaving as specified |
+| Healthy write verified by independent read-back | PASS on 1 vendor server, with FAIL and UNKNOWN controls behaving as specified |
 | Runtime shadow calls from a real agent client | 2 of 2 PASS |
-| Read-back-proven silent success (reported done, record missing or wrong) | 0 observed so far |
+| Read-back-proven false success (reported done, record missing or wrong) | 0 observed so far |
+| Scanned vendor servers whose write tools return API failures without `isError` | 3 of 4, each reproduced at least twice, reported upstream |
 
-An agent reading a result without `isError` has no protocol-level signal that
-the call failed. Fourgate reports these as `UNKNOWN / success_without_record_id`
-rather than PASS. Vendors are not named here; details are under
-[Field evidence](#field-evidence).
-
-Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.md) for the step-by-step Windows guide and contract templates.
+Tested against 4 official vendor MCP servers from 4 companies, run locally over
+stdio against the vendors' live APIs, using disposable test accounts or
+deliberately invalid credentials. Fourgate reports a failure without `isError`
+as `UNKNOWN / success_without_record_id`, never PASS. Vendors are not named;
+details are under [Field evidence](#field-evidence).
 
 ## Scan a disposable MCP test account (under five minutes)
 
