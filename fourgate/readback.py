@@ -99,7 +99,7 @@ def _url(config, extracted):
 
 def _get(url, token, timeout):
     headers = {"Accept": "application/vnd.github+json" if url.startswith("https://api.github.com/") else "application/json",
-               "User-Agent": "Fourgate/0.1"}
+               "User-Agent": "Fourgate/0.2"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers, method="GET")

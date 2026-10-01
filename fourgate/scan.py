@@ -130,7 +130,7 @@ class StdioClient:
     def initialize(self, protocol):
         _, response = self.request("initialize", {
             "protocolVersion": protocol, "capabilities": {},
-            "clientInfo": {"name": "fourgate-scan", "version": "0.1.0"},
+            "clientInfo": {"name": "fourgate-scan", "version": "0.2.0"},
         }, 5000)
         if "error" in response or not isinstance(response.get("result"), dict):
             raise RuntimeError("initialize failed")
