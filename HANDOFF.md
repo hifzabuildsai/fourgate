@@ -162,7 +162,10 @@ shape-only.
    means the dry run in step 3 will show the cause; `unknown /
    verifier_timeout` means the 2000 ms budget was exceeded;
    `unknown / verifier_malformed` means a reason code is not allowed.
-6. Do not retry an ambiguous write. Review `outcomes.jsonl` before sharing,
+6. Render the log for review or for a pilot customer:
+   `fourgate summary outcomes.jsonl --out fourgate-summary.html` (local,
+   static HTML; each line also records `gate_ms`, the time Fourgate added).
+7. Do not retry an ambiguous write. Review `outcomes.jsonl` before sharing,
    and do not commit runtime contracts that contain record IDs or account
    identifiers.
 
