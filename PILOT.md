@@ -99,7 +99,8 @@ your MCP client back at the original server command, and delete these files.
 - MCP servers launched as **local stdio** processes. Remote (HTTP) MCP servers
   are not supported yet.
 - Read-back is an **HTTPS GET** to an API that can return the written record,
-  authenticated with a Bearer token or with no auth.
+  authenticated with a Bearer token, a custom header (e.g. X-Api-Key), or Basic
+  auth, or with no auth.
 - Each check is capped at 2000 ms. On a Windows laptop the HTTP verifier
   measured 1.2–1.6 s per call, so add this latency to protected calls.
 - Contracts are written by hand and reviewed by a human.

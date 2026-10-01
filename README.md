@@ -249,7 +249,7 @@ yet.
 ## Current limitations
 
 - Outcome contracts are hand-authored and human-approved; generation is not implemented.
-- Runtime verifiers are local commands. The bundled one, `fourgate.verify_http`, is a generic HTTP GET read-back with optional Bearer token; there are no database adapters.
+- Runtime verifiers are local commands. The bundled one, `fourgate.verify_http`, is a generic HTTP GET read-back; the read credential can be sent as a Bearer token, a custom header, or Basic auth; there are no database adapters.
 - Outcome verification adds read-back latency on the protected call. The runtime caps each verifier at 2000 ms and fails open (UNKNOWN) on uncertainty. `verify_http` measured 1.2–1.6 s per call on a Windows laptop, and a first cold call exceeded its budget, so headroom is small on slow networks.
 - Only command-configured local stdio MCP servers are covered (scanner and runtime); no remote MCP transport.
 - No dashboard, alerting product, gateway, retry engine, or automatic compensation.
