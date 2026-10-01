@@ -124,6 +124,16 @@ Simulated connector; a local file stands in for the system of record.
 
 `python demo_outcome.py` remains for development from a source checkout.
 
+### Scaffold a setup with fourgate init
+
+```bash
+fourgate init --tool create_issue --test-account disposable-demo   --id-path result.structuredContent.id   --readback-url 'https://api.example.com/issues/{record_id}'   --expect title=title --arg title=FOURGATE-SCAN-TEST   --token-env READBACK_TOKEN --missing-status 404   -- python your_server.py
+```
+
+`init` writes three files to `./fourgate-config` (`--dir` to change; it refuses to overwrite without `--force`): `readback.json` (the HTTP read-back), `runtime.json` (guard contracts using `fourgate.verify_http`) and `scan.json` (one scan case with the same read-back). It validates all three with the same loaders scan, guard and doctor use, and writes nothing if any check fails. Then it prints the next steps with your paths filled in: `fourgate doctor`, `fourgate scan`, `fourgate guard --mode shadow`, `fourgate summary`.
+
+No flag takes a secret: credentials are named by environment variable (`--token-env`, `--username-env`), and the files contain only those names. `init` never reads their values, does not start the server, and does not contact any endpoint.
+
 ### Preflight with fourgate doctor
 
 ```bash

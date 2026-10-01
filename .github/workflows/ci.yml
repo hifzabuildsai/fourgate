@@ -41,6 +41,9 @@ jobs:
       - name: Check installed doctor CLI
         run: fourgate doctor --help
 
+      - name: Check installed init CLI
+        run: fourgate init --help
+
       - name: Doctor preflight on the demo fixture
         run: fourgate doctor --contracts fixtures/contracts/outcome_demo.json -- python fixtures/outcome_server.py
 
