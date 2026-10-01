@@ -1,0 +1,41 @@
+{
+  "scan_version": 1,
+  "server": {
+    "transport": "stdio",
+    "command": ["<server command>", "<server argument>"],
+    "test_account": "<disposable test account label>",
+    "protocol_version": "2024-11-05",
+    "call_timeout_ms": 10000
+  },
+  "write_tools": ["<write tool>"],
+  "cases": [
+    {
+      "tool": "<write tool>",
+      "arguments": {
+        "<recipient argument>": "<your test inbox>",
+        "<title argument>": "FOURGATE DISPOSABLE TEST run1"
+      },
+      "outcome_contract": {
+        "record_id_field": "record_id",
+        "extract": {
+          "record_id": {
+            "source": "result",
+            "path": "result.content.0.text",
+            "parse": "regex",
+            "pattern": "\"id\"\\s*:\\s*\"([^\"]+)\""
+          },
+          "title": {"source": "arguments", "path": "<title argument>"}
+        }
+      },
+      "readback": {
+        "type": "http",
+        "url_template": "https://<vendor-api-host>/<path-to-record>/{record_id}",
+        "token_env": "FOURGATE_READBACK_TOKEN",
+        "expected_fields": {"<response path to title>": "title"},
+        "attempts": 3,
+        "interval_ms": 1000,
+        "timeout_ms": 8000
+      }
+    }
+  ]
+}

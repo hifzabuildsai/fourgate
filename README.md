@@ -4,6 +4,8 @@ Fourgate catches MCP tools that say 'success' when nothing actually happened.
 
 **Status: early, pre-alpha.**
 
+Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.md) for the step-by-step Windows guide and contract templates.
+
 ## Scan a disposable MCP test account (under five minutes)
 
 From a clean checkout with Python 3.10+:
