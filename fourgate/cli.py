@@ -8,6 +8,7 @@ from . import report as reporting
 from . import summary as summarizing
 from . import guard as guarding
 from . import doctor as doctoring
+from .demo import runner as demoing
 
 
 def main(argv=None):
@@ -17,12 +18,16 @@ def main(argv=None):
         return guarding.main(argv[1:])
     if argv[:1] == ["doctor"]:
         return doctoring.main(argv[1:])
+    if argv[:1] == ["demo"]:
+        return demoing.main(argv[1:])
     parser = argparse.ArgumentParser(prog="fourgate")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("guard", help="Run a local stdio MCP server behind the runtime Outcome Guard",
                    usage=guarding.USAGE)
     sub.add_parser("doctor", help="Check a guard setup without side effects (no tools/call, no network)",
                    usage=doctoring.USAGE)
+    sub.add_parser("demo", help="Run a local, zero-credential demo of the Outcome Guard (no API keys, no network)",
+                   usage=demoing.USAGE)
     command = sub.add_parser("scan", help="Exercise explicitly contracted writes in a test account")
     command.add_argument("contract", help="Per-server JSON scan contract")
     command.add_argument("--confirm-test-account", required=True,

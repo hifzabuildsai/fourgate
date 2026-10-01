@@ -16,7 +16,7 @@ dependencies = []
 fourgate = "fourgate.cli:main"
 
 [tool.setuptools]
-packages = ["fourgate", "wrap"]
+packages = ["fourgate", "fourgate.demo", "wrap"]
 
 [project.optional-dependencies]
 dev = ["pytest", "mcp==1.9.4"]

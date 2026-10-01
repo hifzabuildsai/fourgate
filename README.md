@@ -109,14 +109,20 @@ Shadow mode is the default. It records structural verdict metadata without chang
 ### Run the proof
 
 ```bash
-python demo_outcome.py
+fourgate demo
 ```
 
-The demo runs the same `create_issue` workflow three ways:
+One command, no API keys, no network: five real MCP sessions against a demo connector, the guarded ones through a real `fourgate guard` process, then a self-check and a local summary page (`./fourgate-demo/fourgate-demo-summary.html`). `--pace 2` slows it down for screen recording.
 
-1. **Broken connector without Fourgate:** returns `Created ISSUE-001` but persists nothing.
-2. **Broken connector with Fourgate enforce:** an approved read-back check confirms the issue is absent and the model receives `[FOURGATE] {"kind":"outcome_failed", ...}` first; the original `Created ISSUE-001` remains behind it.
-3. **Healthy connector with Fourgate enforce:** the issue exists and the connector response passes through unchanged.
+1. **Without Fourgate:** the broken connector returns `Created ISSUE-001`, but the system of record has 0 issues.
+2. **Enforce, broken connector:** the agent receives `[FOURGATE] {"kind":"outcome_failed", ...}` (`record_missing`) first, with the original `Created ISSUE-001` preserved behind it.
+3. **Enforce, healthy connector:** the issue exists, the response passes through unchanged, and the log records PASS.
+4. **Shadow, broken connector:** the agent receives exactly what it got without Fourgate; the log still records FAIL `record_missing`.
+5. **Enforce, system of record unreachable:** Fourgate cannot confirm either way, records UNKNOWN (never PASS), and does not block the call.
+
+Simulated connector; a local file stands in for the system of record.
+
+`python demo_outcome.py` remains for development from a source checkout.
 
 ### Preflight with fourgate doctor
 

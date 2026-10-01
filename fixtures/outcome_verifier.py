@@ -1,29 +1,7 @@
 #!/usr/bin/env python3
-"""Authoritative deterministic verifier for the demo issue store."""
-import json
-import os
-import sys
-import time
+"""Shim: runs the packaged demo verifier (fourgate/demo/verifier.py) without installing the package."""
+import runpy
 from pathlib import Path
 
-mode=os.environ.get("FOURGATE_DEMO_VERIFIER","normal")
-if mode=="crash": sys.exit(2)
-if mode=="hang": time.sleep(1.0)
-if mode=="malformed": print("not-json"); sys.exit(0)
-if mode=="unapproved": print(json.dumps({"status":"fail","reason_code":"raw_customer_value_mismatch"})); sys.exit(0)
-try: fields=json.loads(sys.stdin.read())
-except Exception: sys.exit(2)
-try:
-    p=Path(os.environ["FOURGATE_DEMO_STORE"])
-    rows=json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
-    if not isinstance(rows,list): raise ValueError("store is not a list")
-except Exception:
-    # An unreadable or malformed authority cannot confirm record absence.
-    sys.exit(2)
-match=next((r for r in rows if r.get("id")==fields.get("issue_id")),None)
-evidence={"lookup":{"issue_id":fields.get("issue_id"),"record":match}}
-if match is None:
-    print(json.dumps({"status":"fail","reason_code":"record_missing","evidence":evidence})); sys.exit(0)
-if match.get("title") != fields.get("title"):
-    print(json.dumps({"status":"fail","reason_code":"field_mismatch","evidence":evidence})); sys.exit(0)
-print(json.dumps({"status":"pass"}))
+# verifier.py ends with `raise SystemExit(main())`, so its exit code propagates through run_path.
+runpy.run_path(str(Path(__file__).resolve().parent.parent / "fourgate" / "demo" / "verifier.py"), run_name="__main__")
