@@ -63,6 +63,15 @@ def main(argv):
         print(f"fourgate guard: contract error: {exc}", file=sys.stderr)
         return 2
     log_path = os.path.abspath(args.log) if args.log else None
+    if log_path:
+        # Fail closed on an unwritable log; append mode never truncates prior records.
+        try:
+            with open(log_path, "a", encoding="utf-8"):
+                pass
+        except OSError as exc:
+            print(f"fourgate guard: cannot write outcome log {log_path}: {exc.strerror or type(exc).__name__}",
+                  file=sys.stderr)
+            return 2
     _banner(args, contracts, log_path, target)
     # Imported late: wrap.py adds wrap/ to sys.path for its own bare imports.
     from wrap import wrap as runtime
@@ -77,7 +86,7 @@ def main(argv):
 def _banner(args, contracts, log_path, target):
     """Startup summary on stderr. Never prints env values or target arguments."""
     names = sorted(outcome.secret_env_names(contracts))
-    missing = [name for name in names if name not in os.environ]
+    missing = [name for name in names if not os.environ.get(name)]
     withheld = ", ".join(
         f"{name} (NOT SET - read-back will likely be UNKNOWN)" if name in missing else f"{name} (set)"
         for name in names) or "none"

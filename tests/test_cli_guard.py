@@ -162,6 +162,7 @@ CONTRACT_CASES = [pytest.param(build, id=name) for name, build in [
     ("unreadable_file", lambda: None),
     ("invalid_json", lambda: "{not json"),
     ("not_utf8", lambda: b"\xff\xfe{}"),
+    ("too_deeply_nested", lambda: "[" * 100000 + "]" * 100000),
     ("top_level_list", lambda: "[]"),
     ("version_missing", _at(("contract_version",))),
     ("version_2", _at(("contract_version",), 2)),
@@ -260,6 +261,17 @@ def test_usage_errors_fail_closed_without_starting_target(tmp_path, build):
     assert not marker.exists()
 
 
+def test_unwritable_log_fails_closed_without_starting_target(tmp_path):
+    target, marker = _marker_target(tmp_path)
+    log = tmp_path / "no-such-directory" / "outcomes.jsonl"
+    result = _run(["--contracts", CONTRACTS, "--log", log, "--", *target])
+    assert result.returncode == 2, result.stderr
+    assert result.stderr.startswith(b"fourgate guard: cannot write outcome log ")
+    assert result.stdout == b""
+    assert not marker.exists()
+    assert not log.parent.exists()
+
+
 def test_valid_contract_starts_target(tmp_path):
     # Control for the matrices above: the marker target does run when nothing is wrong.
     target, marker = _marker_target(tmp_path)
@@ -302,6 +314,12 @@ def test_load_strict_resolves_cwd_relative_to_contract_file(tmp_path):
     assert outcome.load_strict(str(_write(nested, _contract(cwd="../verifiers"))))
     with pytest.raises(ValueError, match="cwd"):
         outcome.load_strict(str(_write(nested, _contract(cwd="verifiers"))))
+
+
+def test_load_strict_maps_deep_nesting_to_contract_error(tmp_path):
+    path = _write(tmp_path, "[" * 100000 + "]" * 100000)
+    with pytest.raises(ValueError, match="too deeply nested"):
+        outcome.load_strict(str(path))
 
 
 def test_load_strict_names_tool_and_field_without_echoing_values(tmp_path):
@@ -440,7 +458,33 @@ def test_missing_secret_env_warns_and_still_launches(tmp_path):
     assert f"WARNING: {UNSET_ENV} is not set" in stderr
 
 
-@pytest.mark.parametrize("verifier_mode,reason", [("crash", "verifier_error"), ("hang", "verifier_timeout"),
+def test_empty_secret_env_value_counts_as_not_set(tmp_path):
+    target, marker = _marker_target(tmp_path)
+    result = _run(["--contracts", _secret_contract(tmp_path, [SECRET_ENV]), "--", *target],
+                  env=_env(tmp_path / "issues.json", **{SECRET_ENV: ""}))
+    assert result.returncode == 0, result.stderr
+    assert marker.exists()
+    stderr = result.stderr.decode()
+    assert f"{SECRET_ENV} (NOT SET" in stderr
+    assert f"WARNING: {SECRET_ENV} is not set" in stderr
+    assert f"{SECRET_ENV} (set)" not in stderr
+    assert f"{SECRET_ENV}=" not in stderr
+
+
+def test_existing_log_lines_are_preserved_and_appended(tmp_path):
+    log = tmp_path / "outcomes.jsonl"
+    prior = '{"prior": "record one"}\n{"prior": "record two"}\n'
+    log.write_text(prior, encoding="utf-8")
+    _session(_guard("--contracts", CONTRACTS, "--log", log, target=_server()), _env(tmp_path / "issues.json"))
+    text = log.read_text(encoding="utf-8")
+    assert text.startswith(prior)
+    records = _records(log)
+    assert records[:2] == [{"prior": "record one"}, {"prior": "record two"}]
+    assert len(records) == 3
+    assert (records[2]["status"], records[2]["reason_code"]) == ("fail", "record_missing")
+
+
+@pytest.mark.parametrize("verifier_mode,reason",[("crash", "verifier_error"), ("hang", "verifier_timeout"),
                                                   ("malformed", "verifier_malformed")])
 def test_enforce_fails_open_on_verifier_faults(tmp_path, verifier_mode, reason):
     log = tmp_path / "outcomes.jsonl"

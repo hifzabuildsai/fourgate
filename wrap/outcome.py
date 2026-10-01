@@ -78,6 +78,8 @@ def load_strict(path):
         raise ValueError(f"{path} is not UTF-8 text") from None
     except json.JSONDecodeError as exc:
         raise ValueError(f"{path} is not valid JSON (line {exc.lineno}, column {exc.colno})") from None
+    except (RecursionError, MemoryError):
+        raise ValueError(f"{path} is not valid JSON (too deeply nested)") from None
     if not isinstance(data, dict):
         raise ValueError("top level must be a JSON object")
     version = data.get("contract_version")
