@@ -121,21 +121,21 @@ The demo runs the same `create_issue` workflow three ways:
 ### Wrap a local stdio server
 
 ```bash
-python wrap/wrap.py \
-  --outcome-contracts path/to/contracts.json \
-  --outcome-mode shadow \
-  --server-label my-server \
-  --outcome-log outcomes.jsonl \
+fourgate guard \
+  --contracts path/to/contracts.json \
+  --mode shadow \
+  --server my-server \
+  --log outcomes.jsonl \
   -- python your_server.py
 ```
 
-Switch to `--outcome-mode enforce` only for human-approved contracts after shadow traffic is clean.
+Switch to `--mode enforce` only for human-approved contracts after shadow traffic is clean. `guard` validates the contracts at startup and exits 2 without starting the server if any are invalid; per-call verifier faults are still UNKNOWN and fail open. The startup summary goes to stderr, so stdout carries only MCP traffic. `python wrap/wrap.py` with its existing flags remains supported for existing setups.
 
 For a hosted connector, the verifier can be the scan's own HTTP read-back:
 `python -m fourgate.verify_http readback.json` takes the extracted fields on
 stdin and runs the same bounded GET as `fourgate scan`. Any uncertainty exits
 nonzero and is recorded as UNKNOWN. `verifier.secret_env` names the read
-credential's environment variables; `wrap.py` removes them from the wrapped
+credential's environment variables; `fourgate guard` removes them from the wrapped
 server's environment while the verifier still receives them:
 
 ```json

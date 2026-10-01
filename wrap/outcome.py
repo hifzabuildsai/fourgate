@@ -61,6 +61,85 @@ def load(path):
     return data
 
 
+def load_strict(path):
+    """Load runtime contracts or raise ValueError; never fails open.
+
+    Returns the same shape as ``load``. Rejects anything ``evaluate`` would
+    treat as ``contract_invalid``, plus contracts whose FAIL can never be
+    confirmed (no ``allowed_failure_reasons``). Messages name the tool and
+    field path but never echo field values. No output, no side effects.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except OSError as exc:
+        raise ValueError(f"could not read {path}: {exc.strerror or type(exc).__name__}") from None
+    except UnicodeDecodeError:
+        raise ValueError(f"{path} is not UTF-8 text") from None
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path} is not valid JSON (line {exc.lineno}, column {exc.colno})") from None
+    if not isinstance(data, dict):
+        raise ValueError("top level must be a JSON object")
+    version = data.get("contract_version")
+    if type(version) is not int or version != 1:
+        raise ValueError("contract_version must be 1")
+    tools = data.get("tools")
+    if not isinstance(tools, dict) or not tools:
+        raise ValueError("tools must be a non-empty object")
+    base_dir = os.path.dirname(os.path.abspath(path))
+    for tool_name, contract in tools.items():
+        if not isinstance(tool_name, str) or not tool_name:
+            raise ValueError("tool names must be non-empty strings")
+        _check_contract(f"tools[{json.dumps(tool_name)}]", contract, base_dir)
+    data["_contract_dir"] = base_dir
+    return data
+
+
+def _check_contract(where, contract, base_dir):
+    if not isinstance(contract, dict):
+        raise ValueError(f"{where} must be an object")
+    selectors = contract.get("extract")
+    if not isinstance(selectors, dict) or not selectors:
+        raise ValueError(f"{where}.extract must be a non-empty object")
+    for name, selector in selectors.items():
+        at = f"{where}.extract[{json.dumps(name)}]"
+        if not isinstance(selector, dict):
+            raise ValueError(f"{at} must be an object")
+        if selector.get("source") not in ("arguments", "result"):
+            raise ValueError(f"{at}.source must be arguments or result")
+        if not isinstance(selector.get("path"), str):
+            raise ValueError(f"{at}.path must be a string")
+        try:
+            validate_text_selector(selector)
+        except ValueError as exc:
+            raise ValueError(f"{at}: {exc}") from None
+    verifier = contract.get("verifier")
+    if not isinstance(verifier, dict):
+        raise ValueError(f"{where}.verifier must be an object")
+    command = verifier.get("command")
+    if not isinstance(command, list) or not command or not all(isinstance(p, str) for p in command):
+        raise ValueError(f"{where}.verifier.command must be a non-empty list of strings")
+    timeout_ms = verifier.get("timeout_ms")
+    if type(timeout_ms) is not int or not 1 <= timeout_ms <= MAX_VERIFIER_TIMEOUT_MS:
+        raise ValueError(f"{where}.verifier.timeout_ms must be an integer from 1 to {MAX_VERIFIER_TIMEOUT_MS}")
+    cwd = verifier.get("cwd")
+    if cwd is not None:
+        if not isinstance(cwd, str):
+            raise ValueError(f"{where}.verifier.cwd must be a string")
+        if not os.path.isdir(os.path.join(base_dir, cwd)):
+            raise ValueError(f"{where}.verifier.cwd is not an existing directory (relative to the contract file)")
+    if "secret_env" in verifier:
+        names = verifier["secret_env"]
+        if not isinstance(names, list) or not all(isinstance(n, str) and ENV_NAME.fullmatch(n) for n in names):
+            raise ValueError(f"{where}.verifier.secret_env must be a list of environment variable names")
+    allowed = contract.get("allowed_failure_reasons")
+    if not isinstance(allowed, list) or not allowed or not all(isinstance(r, str) and r for r in allowed):
+        raise ValueError(f"{where}.allowed_failure_reasons must be a non-empty list of non-empty strings")
+    recovery = contract.get("recovery", "stop")
+    if not isinstance(recovery, str) or recovery not in VALID_RECOVERIES:
+        raise ValueError(f"{where}.recovery must be one of {', '.join(sorted(VALID_RECOVERIES))}")
+
+
 def secret_env_names(contracts):
     """Verifier-only env var names that the wrapped server must not inherit."""
     names = set()

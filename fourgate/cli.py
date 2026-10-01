@@ -6,11 +6,18 @@ import sys
 from .scan import scan
 from . import report as reporting
 from . import summary as summarizing
+from . import guard as guarding
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    # guard owns its argv: tokens after "--" go to the server untouched.
+    if argv[:1] == ["guard"]:
+        return guarding.main(argv[1:])
     parser = argparse.ArgumentParser(prog="fourgate")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("guard", help="Run a local stdio MCP server behind the runtime Outcome Guard",
+                   usage=guarding.USAGE)
     command = sub.add_parser("scan", help="Exercise explicitly contracted writes in a test account")
     command.add_argument("contract", help="Per-server JSON scan contract")
     command.add_argument("--confirm-test-account", required=True,

@@ -35,6 +35,9 @@ jobs:
       - name: Check installed scan CLI
         run: fourgate --help
 
+      - name: Check installed guard CLI
+        run: fourgate guard --help
+
       - name: Run runtime self-check
         run: python wrap/wrap.py --selfcheck
 
