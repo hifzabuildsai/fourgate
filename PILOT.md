@@ -23,13 +23,13 @@ machines. [`SECURITY.md`](SECURITY.md) has the full data-flow detail.
  Your agent (e.g. an MCP client)
         │  tools/call
         ▼
- wrap.py  ── local process on your machine ─────────────────────────────┐
+ fourgate guard  ── local process on your machine ──────────────────────┐
         │  forwards the call unchanged                                  │
         ▼                                                               │
  Your MCP server  ──(its own API calls, as today)──►  Your system of record
         │  "success" result                                             ▲
         ▼                                                               │
- wrap.py extracts only the contracted fields (e.g. record ID, title)    │
+ guard extracts only the contracted fields (e.g. record ID, title)      │
         │                                                               │
         └─► verifier (local)  ── HTTPS GET with a separate read-only ───┘
                  │               credential
@@ -61,7 +61,7 @@ your MCP client back at the original server command, and delete these files.
 
 - The MCP server keeps its own write credential, exactly as today.
 - The verifier uses a **separate, read-only** credential that you create.
-  When you list its variable name in `verifier.secret_env`, `wrap.py` removes
+  When you list its variable name in `verifier.secret_env`, Fourgate guard removes
   it from the MCP server's environment, so the server under test cannot see
   or use it.
 - Both are environment variables you set yourself. Contracts, logs and the
@@ -76,7 +76,9 @@ your MCP client back at the original server command, and delete these files.
 - **Enforce mode** (only after you approve the contracts): on a confirmed FAIL,
   Fourgate adds one attributed verdict before the tool's original response so
   the agent knows the write did not land. Nothing else changes.
-- Any Fourgate problem (verifier timeout, network error, bad config, internal
+- An invalid contract file is rejected at startup: `fourgate guard` reports
+  the problem and does not launch the server.
+- Any per-call Fourgate problem (verifier timeout, network error, internal
   error) is **UNKNOWN and fails open**: the call goes through untouched.
 - No LLM makes the PASS/FAIL decision; it is a deterministic read-back check.
 
