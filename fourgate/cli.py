@@ -3,6 +3,7 @@ import argparse
 import json
 import sys
 
+from . import __version__
 from .scan import scan
 from . import report as reporting
 from . import summary as summarizing
@@ -24,6 +25,7 @@ def main(argv=None):
     if argv[:1] == ["init"]:
         return initing.main(argv[1:])
     parser = argparse.ArgumentParser(prog="fourgate")
+    parser.add_argument("--version", action="version", version=f"fourgate {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("guard", help="Run a local stdio MCP server behind the runtime Outcome Guard",
                    usage=guarding.USAGE)

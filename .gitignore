@@ -12,3 +12,9 @@ fourgate-report.json
 fourgate-report.html
 .mcp-venvs/
 .pytest_cache/
+fourgate-config/
+fourgate-demo/
+fourgate-output/
+fourgate-report/
+demo-output/
+outcomes.jsonl
