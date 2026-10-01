@@ -173,8 +173,9 @@ def scan(path, confirmation):
                 rows.append({"tool": name, "status": "UNKNOWN", "reason_code": "tool_not_discovered"})
                 continue
             readback_config = case.get("readback")
-            token_env = readback_config.get("token_env") if readback_config else None
-            if token_env and not os.environ.get(token_env):
+            # Check every read-back credential before the write: a write whose
+            # outcome cannot be read back would only produce an UNKNOWN.
+            if any(not os.environ.get(env_name) for env_name in readback.credential_envs(readback_config)):
                 rows.append({"tool": name, "status": "UNKNOWN", "reason_code": "credential_missing", "attempts": 0})
                 continue
             try:

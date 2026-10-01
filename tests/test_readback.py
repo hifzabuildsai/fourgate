@@ -201,8 +201,8 @@ def test_github_issue_url_and_404_default_uncertain(monkeypatch):
     readback.validate(config, extract)
     urls = []
 
-    def fake_get(url, token, timeout):
-        urls.append((url, token))
+    def fake_get(url, headers, timeout):
+        urls.append((url, headers.get("Authorization")))
         return 404, None
 
     monkeypatch.setattr(readback, "_get", fake_get)
@@ -210,7 +210,7 @@ def test_github_issue_url_and_404_default_uncertain(monkeypatch):
     result = readback.evaluate(config, {"extract": extract}, {"title": "test"},
                                {"result": {"structuredContent": {"number": 42}}})
     assert result["status"] == "unknown"
-    assert urls == [("https://api.github.com/repos/example/disposable/issues/42", "local-test-token")]
+    assert urls == [("https://api.github.com/repos/example/disposable/issues/42", "Bearer local-test-token")]
 
 
 def test_dynamic_host_and_non_https_rejected():

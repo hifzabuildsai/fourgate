@@ -188,8 +188,24 @@ Put it in `readback.url_template` with the extracted name in braces:
 `https://<vendor-api-host>/<path-to-record>/{record_id}`.
 
 - The host must be fixed and HTTPS. Only the path or query can use `{...}`.
-- Fourgate sends `Authorization: Bearer <read-back key>`. If the vendor needs
-  a different auth header, generic read-back cannot be used for that vendor.
+- By default Fourgate sends `Authorization: Bearer <read-back key>`. If the
+  vendor's docs show a different auth style, add `readback.auth` (the key
+  itself always stays in `token_env`):
+
+  | Vendor docs show | `readback.auth` |
+  | --- | --- |
+  | `Authorization: Bearer <key>` | leave out (or `{"scheme": "bearer"}`) |
+  | `X-Api-Key: <key>` (any custom header) | `{"scheme": "header", "header": "X-Api-Key"}` |
+  | `Authorization: Token <key>` (other prefix) | `{"scheme": "header", "header": "Authorization", "prefix": "Token "}` |
+  | Basic auth, key as password, fixed user | `{"scheme": "basic", "username": "api"}` |
+  | Basic auth, key as password, account user | `{"scheme": "basic", "username_env": "FOURGATE_READBACK_USER"}` |
+  | Basic auth, key as username | `{"scheme": "basic", "token_as": "username"}` (add `"password": "X"` if the docs use a filler) |
+
+- Fixed, **non-secret** headers the API requires (for example an API version)
+  go in `readback.headers`: `"headers": {"Api-Version": "2024-01-01"}`.
+  Header names that look like credentials (`Authorization`, `*-Key`,
+  `*Token*`, `Cookie`, ...) are rejected there; keys only go through
+  `token_env`.
 - Leave out `missing_statuses`. A 404 then stays UNKNOWN. Add `[404]` only
   after confirming that the read-back key can fetch a record you created by
   hand.
@@ -440,8 +456,9 @@ Nothing else crosses over: no commands, keys, raw reports or account details.
 | `scan configuration error: [WinError 2] ...` | The first `server.command` element was not found (e.g. `npx` instead of `npx.cmd`, or `node` not on PATH). | Use `node` plus the bin path (section 1), or `npx.cmd`; check `node --version`. |
 | `UNKNOWN / tool_not_discovered` | The tool name is misspelled, or the server hides write tools unless a flag or mode is set (read-only mode, a toolset list, a feature flag). | Copy the name from the source (3a); enable the server's write mode as its README describes. |
 | `UNKNOWN / RuntimeError` with `"tool": null` | The server did not start or crashed before listing tools. A common cause is a failed native build during `npm.cmd install` (node-gyp / missing build tools), which leaves a broken `node_modules`. | Run the server command by hand in the scan-work folder to see its error. For a failed native build: make a **fresh** folder and run `npm.cmd install <server package> --ignore-scripts`, then retry. Also check that its required env vars are set. |
-| `UNKNOWN / credential_missing` | `token_env` is not set in **this** window (keys do not carry over between windows). | Section 2, then `[bool]$env:FOURGATE_READBACK_TOKEN` must print `True`. |
-| `UNKNOWN / readback_unconfirmed`, `evidence.readback.status: 401` (or 403) | The read-back key is wrong, expired, lacks read scope, or the vendor expects a different auth header than `Bearer`. | Re-enter the key; check its scope in the vendor dashboard. If the vendor does not use Bearer auth, generic read-back cannot verify it. |
+| `UNKNOWN / credential_missing` | `token_env` (or `readback.auth.username_env`) is not set in **this** window (keys do not carry over between windows). **No write was sent.** | Section 2, then `[bool]$env:FOURGATE_READBACK_TOKEN` must print `True`. |
+| `UNKNOWN / readback_unconfirmed`, `evidence.readback.status: 401` (or 403) | The read-back key is wrong, expired, lacks read scope, or `readback.auth` does not match the vendor's auth style. | Re-enter the key; check its scope in the vendor dashboard; compare the vendor docs with the `readback.auth` table (3c). |
+| `scan configuration error: readback.auth ...` / `readback.headers ...` | The auth block or a static header failed validation (unknown scheme or key, credential-looking static header, control characters). | Fix it from the message and the 3c table; secrets never go in `headers`. |
 | PASS expected but `success_without_record_id` in check A | The ID selector does not match the real response text. | Look at `evidence.tool_response.result.content` and fix the regex/path (3b). |
 
 ## 11. Runtime shadow mode
