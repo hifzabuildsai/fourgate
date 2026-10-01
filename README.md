@@ -159,7 +159,12 @@ server's environment while the verifier still receives them:
 ```
 
 `readback.json` is a scan contract `readback` object with `timeout_ms` of at
-most 1500. Step-by-step setup and the verifier dry run are in
+most 1500. The read token is sent as `Authorization: Bearer` unless
+`readback.auth` selects a custom header (`{"scheme": "header", "header":
+"X-Api-Key"}`) or Basic auth; `readback.headers` adds fixed, non-secret headers
+such as an API version. List every read credential variable (`token_env`, and
+`auth.username_env` if used) in `verifier.secret_env`. Details:
+[`OPERATOR.md` → 3c](OPERATOR.md#3c-find-the-read-back-get-endpoint). Step-by-step setup and the verifier dry run are in
 [`HANDOFF.md` → Shadow mode with a real connector](HANDOFF.md#shadow-mode-with-a-real-connector).
 
 See [`specs/outcome-guard-mvp.md`](specs/outcome-guard-mvp.md) for the contract and failure semantics.

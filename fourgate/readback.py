@@ -3,7 +3,21 @@
 The verifier performs GET requests only. It does not retry the write. A
 missing/mismatched record becomes FAIL only after the configured attempts;
 authentication, network, parse, and timeout uncertainty remain UNKNOWN.
+
+How the read credential (``token_env``) is sent is set by ``readback.auth``
+(``http`` read-back only; the default is ``Authorization: Bearer``):
+
+    {"scheme": "bearer"}
+    {"scheme": "header", "header": "X-Api-Key", "prefix": ""}
+    {"scheme": "basic", "username_env": "READBACK_USER"}    # token is the password
+    {"scheme": "basic", "username": "api"}                  # static, non-secret username
+    {"scheme": "basic", "token_as": "username", "password": "X"}  # token is the username
+
+``readback.headers`` adds static, non-secret request headers (for example an
+API version). Credential-looking and transport header names are rejected so a
+secret can only ever arrive through an environment variable.
 """
+import base64
 import json
 import os
 import re
@@ -20,6 +34,26 @@ MAX_BODY_BYTES = 1024 * 1024
 NAME = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*$")
 PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+# RFC 9110 field-name token, bounded.
+HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$")
+# Printable ASCII only: no CR/LF or other control characters (header injection).
+HEADER_VALUE = re.compile(r"^[\x20-\x7e]*$")
+MAX_STATIC_HEADERS = 16
+MAX_STATIC_VALUE = 256
+AUTH_SCHEMES = ("bearer", "header", "basic")
+AUTH_KEYS = {
+    "bearer": {"scheme"},
+    "header": {"scheme", "header", "prefix"},
+    "basic": {"scheme", "username", "username_env", "token_as", "password"},
+}
+# Transport-controlled headers a contract must never set or carry a token in.
+RESERVED_HEADERS = frozenset({
+    "host", "content-length", "transfer-encoding", "connection", "upgrade", "te", "trailer",
+    "keep-alive", "expect", "proxy-authorization", "proxy-connection", "forwarded",
+})
+# Static headers are committed in contracts, so anything credential-shaped is
+# refused there; credentials go through token_env and readback.auth only.
+SECRET_HEADER = re.compile(r"(?:auth|token|secret|passw|key|cookie|credential|session|signature)", re.I)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -70,6 +104,113 @@ def validate(config, extract):
         raise ValueError("token_env must be an environment variable name")
     if config["type"] == "github_issue" and not token:
         raise ValueError("github_issue requires token_env")
+    if config["type"] != "http" and ("auth" in config or "headers" in config):
+        raise ValueError("readback.auth and readback.headers are supported only for type http")
+    auth_header = _validate_auth(config.get("auth"), token)
+    _validate_static_headers(config.get("headers"), auth_header)
+
+
+def _validate_auth(auth, token_env):
+    """Validate readback.auth; return the lower-case header name it sets, or None."""
+    if auth is None:
+        return "authorization" if token_env else None
+    if not isinstance(auth, dict) or auth.get("scheme") not in AUTH_SCHEMES:
+        raise ValueError("readback.auth.scheme must be bearer, header or basic")
+    if not token_env:
+        raise ValueError("readback.auth requires token_env")
+    scheme = auth["scheme"]
+    unknown = set(auth) - AUTH_KEYS[scheme]
+    if unknown:
+        raise ValueError(f"readback.auth ({scheme}) has unsupported keys: {', '.join(sorted(unknown))}")
+    if scheme == "bearer":
+        return "authorization"
+    if scheme == "header":
+        name = auth.get("header")
+        if not isinstance(name, str) or not HEADER_NAME.fullmatch(name) or name.lower() in RESERVED_HEADERS:
+            raise ValueError("readback.auth.header must be a valid, non-transport HTTP header name")
+        prefix = auth.get("prefix", "")
+        if not isinstance(prefix, str) or len(prefix) > 64 or not HEADER_VALUE.fullmatch(prefix):
+            raise ValueError("readback.auth.prefix must be printable ASCII, at most 64 characters")
+        return name.lower()
+    token_as = auth.get("token_as", "password")
+    if token_as not in ("password", "username"):
+        raise ValueError("readback.auth.token_as must be password or username")
+    username, username_env = auth.get("username"), auth.get("username_env")
+    if token_as == "password":
+        if (username is None) == (username_env is None):
+            raise ValueError("basic auth needs exactly one of username or username_env")
+        if username is not None and (not isinstance(username, str) or not username or len(username) > 128
+                                     or ":" in username or not HEADER_VALUE.fullmatch(username)):
+            raise ValueError("readback.auth.username must be printable ASCII without ':' (at most 128 characters)")
+        if username_env is not None and (not isinstance(username_env, str) or not NAME.fullmatch(username_env)
+                                         or username_env == token_env):
+            raise ValueError("readback.auth.username_env must be an environment variable name other than token_env")
+        if "password" in auth:
+            raise ValueError("readback.auth.password is only for token_as username; the token is the password")
+    else:
+        if username is not None or username_env is not None:
+            raise ValueError("basic auth with token_as username takes no username or username_env")
+        filler = auth.get("password", "")
+        if not isinstance(filler, str) or len(filler) > 16 or not HEADER_VALUE.fullmatch(filler):
+            raise ValueError("readback.auth.password must be a short non-secret filler (at most 16 characters)")
+    return "authorization"
+
+
+def _validate_static_headers(headers, auth_header):
+    if headers is None:
+        return
+    if not isinstance(headers, dict) or len(headers) > MAX_STATIC_HEADERS:
+        raise ValueError(f"readback.headers must be an object of at most {MAX_STATIC_HEADERS} headers")
+    seen = set()
+    for name, value in headers.items():
+        lower = name.lower() if isinstance(name, str) else ""
+        if not HEADER_NAME.fullmatch(name if isinstance(name, str) else ""):
+            raise ValueError("readback.headers names must be valid HTTP header names")
+        if lower in seen:
+            raise ValueError(f"readback.headers repeats {name!r}")
+        seen.add(lower)
+        if lower in RESERVED_HEADERS or lower == "user-agent":
+            raise ValueError(f"readback.headers cannot set {name!r}")
+        if SECRET_HEADER.search(name) or lower == auth_header:
+            raise ValueError(f"readback.headers cannot carry credentials ({name!r}); use token_env with readback.auth")
+        if not isinstance(value, str) or len(value) > MAX_STATIC_VALUE or not HEADER_VALUE.fullmatch(value):
+            raise ValueError(f"readback.headers[{name!r}] must be printable ASCII, at most {MAX_STATIC_VALUE} characters")
+
+
+def credential_envs(config):
+    """Environment variable names the read-back needs before any write is sent."""
+    names = []
+    if isinstance(config, dict):
+        if config.get("token_env"):
+            names.append(config["token_env"])
+        auth = config.get("auth")
+        if isinstance(auth, dict) and auth.get("username_env"):
+            names.append(auth["username_env"])
+    return names
+
+
+def _request_headers(config, url, token, username=None):
+    headers = {"Accept": "application/vnd.github+json" if url.startswith("https://api.github.com/") else "application/json",
+               "User-Agent": "Fourgate/0.2"}
+    for name, value in (config.get("headers") or {}).items():
+        # Static headers replace defaults case-insensitively (e.g. a vendor Accept type).
+        for existing in [k for k in headers if k.lower() == name.lower()]:
+            del headers[existing]
+        headers[name] = value
+    if not token:
+        return headers
+    auth = config.get("auth") or {"scheme": "bearer"}
+    if auth["scheme"] == "bearer":
+        headers["Authorization"] = f"Bearer {token}"
+    elif auth["scheme"] == "header":
+        headers[auth["header"]] = f"{auth.get('prefix', '')}{token}"
+    else:
+        if auth.get("token_as", "password") == "username":
+            pair = f"{token}:{auth.get('password', '')}"
+        else:
+            pair = f"{username if username is not None else auth['username']}:{token}"
+        headers["Authorization"] = "Basic " + base64.b64encode(pair.encode("utf-8")).decode("ascii")
+    return headers
 
 
 def _validate_template(template, extract):
@@ -97,11 +238,7 @@ def _url(config, extracted):
                            config["url_template"])
 
 
-def _get(url, token, timeout):
-    headers = {"Accept": "application/vnd.github+json" if url.startswith("https://api.github.com/") else "application/json",
-               "User-Agent": "Fourgate/0.2"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+def _get(url, headers, timeout):
     request = urllib.request.Request(url, headers=headers, method="GET")
     try:
         with OPENER.open(request, timeout=timeout) as response:
@@ -130,10 +267,16 @@ def evaluate_extracted(config, extracted):
     token = os.environ.get(token_env) if token_env else None
     if token_env and not token:
         return {"status": "unknown", "reason_code": "credential_missing", "attempts": 0}
+    auth = config.get("auth") if isinstance(config.get("auth"), dict) else {}
+    username_env = auth.get("username_env")
+    username = os.environ.get(username_env) if username_env else None
+    if username_env and (not username or ":" in username):
+        return {"status": "unknown", "reason_code": "credential_missing", "attempts": 0}
     try:
         url = _url(config, extracted)
     except (ValueError, KeyError, TypeError):
         return {"status": "unknown", "reason_code": "readback_selector_invalid", "attempts": 0}
+    headers = _request_headers(config, url, token, username)
     deadline = time.monotonic() + config.get("timeout_ms", 5000) / 1000
     attempts = 0
     last = {"status": "unknown", "reason_code": "readback_timeout", "attempts": 0}
@@ -143,7 +286,7 @@ def evaluate_extracted(config, extracted):
             break
         attempts += 1
         try:
-            status, document = _get(url, token, min(2.0, remaining))
+            status, document = _get(url, headers, min(2.0, remaining))
         except (OSError, ValueError, UnicodeDecodeError, TimeoutError):
             last = {"status": "unknown", "reason_code": "readback_error", "attempts": attempts}
         else:

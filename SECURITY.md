@@ -11,7 +11,11 @@ contracted test arguments. The scanner reads its discovery and tool responses.
 The legacy runtime wrap stays on the same local stdio path. Verifier commands
 run locally, receive only contract-selected fields, and inherit the current
 environment. A configured HTTP/GitHub read-back makes outbound **GET requests
-to that configured endpoint**, carrying an env-supplied token if requested.
+to that configured endpoint**, carrying an env-supplied token if requested
+(as a Bearer token, a configured header, or Basic auth per `readback.auth`).
+Static `readback.headers` are validated to be non-secret: credential-looking
+and transport header names are rejected, so a token can only come from an
+environment variable.
 The scanner removes `readback.token_env` values from the spawned MCP server's
 environment; use separate env names for the server's write credential and
 Fourgate's read credential. The local command verifier still inherits the
