@@ -37,3 +37,74 @@ jobs:
 
       - name: Run runtime self-check
         run: python wrap/wrap.py --selfcheck
+
+  ci-scan-template:
+    # Runs the steps of examples/ci/fourgate-scan.yml against the bundled demo
+    # fixture. Installs from this checkout instead of a tag so the template is
+    # checked against the code under review.
+    runs-on: ubuntu-latest
+    env:
+      FOURGATE_CONTRACT: fixtures/contracts/scan_demo.json
+      FOURGATE_TEST_ACCOUNT: disposable-demo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Fourgate
+        run: python -m pip install .
+
+      - name: Broken fixture scan must exit 1
+        env:
+          FOURGATE_DEMO_MODE: broken
+          FOURGATE_REPORT_DIR: fourgate-output/broken
+        run: |
+          export FOURGATE_DEMO_STORE="$RUNNER_TEMP/broken-issues.json"
+          set +e
+          fourgate scan "$FOURGATE_CONTRACT" \
+            --confirm-test-account "$FOURGATE_TEST_ACCOUNT" \
+            --report-dir "$FOURGATE_REPORT_DIR" > /dev/null
+          code=$?
+          set -e
+          echo "exit code: $code"
+          test "$code" -eq 1
+          test -f "$FOURGATE_REPORT_DIR/fourgate-report.json"
+          test -f "$FOURGATE_REPORT_DIR/fourgate-report.html"
+
+      - name: Healthy fixture scan must exit 0
+        env:
+          FOURGATE_DEMO_MODE: healthy
+          FOURGATE_REPORT_DIR: fourgate-output/healthy
+        run: |
+          export FOURGATE_DEMO_STORE="$RUNNER_TEMP/healthy-issues.json"
+          fourgate scan "$FOURGATE_CONTRACT" \
+            --confirm-test-account "$FOURGATE_TEST_ACCOUNT" \
+            --report-dir "$FOURGATE_REPORT_DIR" > /dev/null
+          test -f "$FOURGATE_REPORT_DIR/fourgate-report.json"
+
+      - name: Summarize verdicts
+        run: |
+          for mode in broken healthy; do
+            FOURGATE_REPORT_DIR="fourgate-output/$mode" python - <<'EOF'
+          import json, os, pathlib
+          path = pathlib.Path(os.environ["FOURGATE_REPORT_DIR"], "fourgate-report.json")
+          if not path.exists():
+              raise SystemExit("no Fourgate report was written")
+          for row in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+              print(f"{row['tool']}: {row['status']} / {row.get('reason_code')}")
+          EOF
+          done
+
+      - name: Upload Fourgate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fourgate-reports-ci-template
+          path: fourgate-output
+          if-no-files-found: error
+          retention-days: 7

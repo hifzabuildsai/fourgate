@@ -1,0 +1,100 @@
+# Fourgate scan for a customer repository.
+#
+# Copy to .github/workflows/fourgate-scan.yml in your repository, then edit
+# the values marked EDIT. The scan performs the real, contracted writes listed
+# in your scan contract, so point it only at a disposable test account.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   FOURGATE_MCP_WRITE_TOKEN  credential the MCP server under test uses to write
+#   FOURGATE_READBACK_TOKEN   separate, preferably read-only, credential used
+#                             for independent read-back
+#
+# Exit codes: 0 = every case PASS; 1 = any FAIL or UNKNOWN; 2 = invalid
+# configuration. Any non-zero exit fails this job.
+#
+# Reports are uploaded as a workflow artifact. Artifacts are visible to anyone
+# with read access to this repository (on a public repository, that is any
+# signed-in GitHub user). Run this workflow only in a private repository, and
+# review reports before sharing them: redaction is best effort and reports can
+# contain record metadata.
+
+name: Fourgate scan
+
+on:
+  workflow_dispatch:
+  # Optional: scheduled runs. Avoid pull_request triggers; every run performs
+  # real writes and fork pull requests do not receive secrets.
+  # schedule:
+  #   - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+# Never run two scans against the same test account at once.
+concurrency:
+  group: fourgate-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # EDIT: Fourgate release tag to install.
+      FOURGATE_REF: v0.1.0
+      # EDIT: path to your scan contract in this repository.
+      FOURGATE_CONTRACT: fourgate/scan-contract.json
+      # EDIT: must equal server.test_account in the contract. Fourgate refuses
+      # to run writes unless this label matches.
+      FOURGATE_TEST_ACCOUNT: disposable-test-account
+      FOURGATE_REPORT_DIR: fourgate-output
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Fourgate
+        run: python -m pip install "git+https://github.com/hifzabuildsai/fourgate@${FOURGATE_REF}"
+
+      # EDIT: install or build the MCP server named in server.command here.
+
+      - name: Run Fourgate scan
+        env:
+          # EDIT: rename to the environment variable your MCP server reads.
+          MCP_SERVER_TOKEN: ${{ secrets.FOURGATE_MCP_WRITE_TOKEN }}
+          # EDIT: rename to match readback.token_env in the contract. Fourgate
+          # removes this variable from the MCP server's environment.
+          FOURGATE_READBACK_TOKEN: ${{ secrets.FOURGATE_READBACK_TOKEN }}
+        # The redacted report is also printed to stdout; it is discarded here so
+        # record data stays out of the job log. The step still fails on exit 1/2.
+        run: >
+          fourgate scan "$FOURGATE_CONTRACT"
+          --confirm-test-account "$FOURGATE_TEST_ACCOUNT"
+          --report-dir "$FOURGATE_REPORT_DIR"
+          > /dev/null
+
+      - name: Summarize verdicts
+        if: always()
+        run: |
+          python - <<'EOF'
+          import json, os, pathlib
+          path = pathlib.Path(os.environ["FOURGATE_REPORT_DIR"], "fourgate-report.json")
+          if not path.exists():
+              raise SystemExit("no Fourgate report was written")
+          for row in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+              print(f"{row['tool']}: {row['status']} / {row.get('reason_code')}")
+          EOF
+
+      - name: Upload Fourgate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fourgate-reports
+          path: ${{ env.FOURGATE_REPORT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 7
