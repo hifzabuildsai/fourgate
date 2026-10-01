@@ -170,6 +170,10 @@ loopback server only; it has not yet been run against the hosted connector.
   credential returned `UNKNOWN / readback_unconfirmed` after three GET attempts.
   These are operator-provided validation results, not a naturally occurring
   false-success incident. The GitHub MCP template has not been run end-to-end.
+- Operator scans of three official company MCP servers (hosting, payments,
+  work management) with deliberately invalid credentials found write tools
+  returning API failures as successful tool results (no `isError`), each
+  reproduced at least twice; bug reports filed upstream.
 - The `test_account` label is an explicit human attestation, not an account
   sandbox. A wrongly configured server can still mutate a production account.
 - Generic HTTP 404 becomes FAIL only with explicit `missing_statuses`;
