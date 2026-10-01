@@ -12,7 +12,7 @@ import threading
 import time
 from pathlib import Path
 
-from wrap import outcome
+from wrap import launch, outcome
 from . import readback
 
 MAX_CALL_TIMEOUT_MS = 10000
@@ -86,8 +86,8 @@ def load_contract(path, confirmation):
 
 class StdioClient:
     def __init__(self, command, cwd, env):
-        self.proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, bufsize=0, env=env, cwd=cwd)
+        self.proc = subprocess.Popen(launch.resolve_command(command, env), stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0, env=env, cwd=cwd)
         self._queue = queue.Queue()
         self._id = 0
         threading.Thread(target=self._read_lines, daemon=True).start()
