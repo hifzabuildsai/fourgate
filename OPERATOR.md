@@ -37,7 +37,7 @@ Hard rules, every time:
 - **Repo**: `C:\hifzazafar\fourgate\fourgate`. Only Fourgate's own code and
   docs live here. Never put real contracts, reports or `node_modules` here.
 - **Scan-work folder**: one folder per target **outside the repo**, for
-  example `C:\fourgate-work\<target>\`. It holds the server install, your
+  example `C:\hifzazafar\fourgate\scan-work\<target>\`. It holds the server install, your
   real contracts, and the `run1`/`run2` report folders. Nothing in it is ever
   committed.
 
@@ -69,8 +69,8 @@ Expect every test to pass. If one fails, stop and do not scan.
 ### Install the server under test (Node servers)
 
 ```powershell
-New-Item -ItemType Directory -Force C:\fourgate-work\<target>
-cd C:\fourgate-work\<target>
+New-Item -ItemType Directory -Force C:\hifzazafar\fourgate\scan-work\<target>
+cd C:\hifzazafar\fourgate\scan-work\<target>
 npm.cmd init -y
 npm.cmd install <server package>
 node --version
@@ -224,7 +224,7 @@ $json = @'
   ...paste the whole edited contract here...
 }
 '@
-[IO.File]::WriteAllText("C:\fourgate-work\<target>\healthy.json", $json)
+[IO.File]::WriteAllText("C:\hifzazafar\fourgate\scan-work\<target>\healthy.json", $json)
 ```
 
 The `'@` line must start at column 0. Notepad is also fine if it saves as
@@ -235,9 +235,9 @@ The `'@` line must start at column 0. Notepad is also fine if it saves as
 These two checks start no server and send no write:
 
 ```powershell
-Select-String -Path C:\fourgate-work\<target>\healthy.json -Pattern "<"
+Select-String -Path C:\hifzazafar\fourgate\scan-work\<target>\healthy.json -Pattern "<"
 cd C:\hifzazafar\fourgate\fourgate
-.venv\Scripts\python.exe -c "from fourgate.scan import load_contract as l; l(r'C:\fourgate-work\<target>\healthy.json', 'my-disposable-account'); print('valid')"
+.venv\Scripts\python.exe -c "from fourgate.scan import load_contract as l; l(r'C:\hifzazafar\fourgate\scan-work\<target>\healthy.json', 'my-disposable-account'); print('valid')"
 ```
 
 The first command must print nothing (no `<placeholder>` left). The second
@@ -293,7 +293,7 @@ Run from the repo with the venv's Python. Each run gets its own report folder:
 
 ```powershell
 cd C:\hifzazafar\fourgate\fourgate
-.venv\Scripts\python.exe -m fourgate scan C:\fourgate-work\<target>\healthy.json --confirm-test-account "my-disposable-account" --report-dir C:\fourgate-work\<target>\healthy-run1
+.venv\Scripts\python.exe -m fourgate scan C:\hifzazafar\fourgate\scan-work\<target>\healthy.json --confirm-test-account "my-disposable-account" --report-dir C:\hifzazafar\fourgate\scan-work\<target>\healthy-run1
 $LASTEXITCODE
 ```
 
@@ -317,7 +317,7 @@ Each `--report-dir` gets `fourgate-report.json` and a self-contained
 `fourgate-report.html`. Show the summary:
 
 ```powershell
-$r = Get-Content C:\fourgate-work\<target>\healthy-run1\fourgate-report.json -Raw -Encoding UTF8 | ConvertFrom-Json
+$r = Get-Content C:\hifzazafar\fourgate\scan-work\<target>\healthy-run1\fourgate-report.json -Raw -Encoding UTF8 | ConvertFrom-Json
 $r.cases | Select-Object tool, status, reason_code, attempts
 $r.cases[0].evidence.tool_response.result | ConvertTo-Json -Depth 10
 $r.cases[0].evidence.readback | ConvertTo-Json -Depth 10
