@@ -4,6 +4,24 @@ Fourgate catches MCP tools that say 'success' when nothing actually happened.
 
 **Status: early, pre-alpha.**
 
+## Results so far (2026-10-01)
+
+Tested against 4 official vendor MCP servers from 4 companies (run locally over
+stdio against the vendors' live APIs), using disposable test accounts or
+deliberately invalid credentials so no real data could be changed.
+
+| Check | Result |
+|---|---|
+| Servers where a write tool returned an API failure as a successful tool result (no `isError`) | **3 of 4**, each reproduced at least twice, reported upstream |
+| Healthy write verified by independent read-back | 1 server: PASS, with FAIL and UNKNOWN controls behaving as specified |
+| Runtime shadow calls from a real agent client | 2 of 2 PASS |
+| Read-back-proven silent success (reported done, record missing or wrong) | 0 observed so far |
+
+An agent reading a result without `isError` has no protocol-level signal that
+the call failed. Fourgate reports these as `UNKNOWN / success_without_record_id`
+rather than PASS. Vendors are not named here; details are under
+[Field evidence](#field-evidence).
+
 Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.md) for the step-by-step Windows guide and contract templates.
 
 ## Scan a disposable MCP test account (under five minutes)
