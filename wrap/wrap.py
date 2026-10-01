@@ -167,10 +167,12 @@ def _forward_response_line(line, write_fd, tracker, loaded_baseline, server_labe
         contract=outcome.lookup(outcome_contracts, tool_name)
         if contract is not None:
             qualified_tool=f"{server_label}/{tool_name}"
+            gate_started=time.monotonic()
             evaluation=_run_outcome_gate(result_obj,outcome_ctx.get("arguments") or {},qualified_tool,contract)
+            gate_ms=int((time.monotonic()-gate_started)*1000)
             if evaluation is None:
                 evaluation={"status":"unknown","reason_code":"gate_timeout_or_error"}
-            outcome.append_record(outcome_log_path, outcome.record(server_label,tool_name,outcome_mode,evaluation))
+            outcome.append_record(outcome_log_path, outcome.record(server_label,tool_name,outcome_mode,evaluation,gate_ms=gate_ms))
             if outcome_mode=="enforce" and evaluation.get("status")=="fail":
                 try:
                     rewritten=verdict.attach_prepend(result_obj,evaluation["verdict"])

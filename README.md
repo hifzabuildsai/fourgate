@@ -158,6 +158,19 @@ server's environment while the verifier still receives them:
 }
 ```
 
+### See the results
+
+```bash
+fourgate summary outcomes.jsonl --out fourgate-summary.html
+```
+
+Turns one or more `outcomes.jsonl` files into a single local HTML page: total
+protected calls, PASS / FAIL / UNKNOWN by tool and by day, what each reason
+means, and the latency Fourgate added (median and p95). The page has no
+JavaScript and makes no network requests. Like the log, it contains structure
+only: no arguments, record values, response bodies or credentials. It also
+prints a one-line text summary (`--json` for machine-readable output).
+
 `readback.json` is a scan contract `readback` object with `timeout_ms` of at
 most 1500. Step-by-step setup and the verifier dry run are in
 [`HANDOFF.md` → Shadow mode with a real connector](HANDOFF.md#shadow-mode-with-a-real-connector).

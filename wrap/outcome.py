@@ -276,9 +276,13 @@ def evaluate(result_obj, arguments, qualified_tool, contract):
         return {"status": "unknown", "reason_code": "internal_error"}
 
 
-def record(server_label, tool_name, mode, evaluation):
-    """Shape-only record: no arguments, extracted values, or raw payload."""
-    return {
+def record(server_label, tool_name, mode, evaluation, gate_ms=None):
+    """Shape-only record: no arguments, extracted values, or raw payload.
+
+    ``gate_ms`` is the wall time Fourgate spent on the outcome check (extraction
+    plus verifier), i.e. the latency it added to the protected call.
+    """
+    item = {
         "timestamp": time.time(),
         "server": server_label,
         "tool": tool_name,
@@ -287,6 +291,9 @@ def record(server_label, tool_name, mode, evaluation):
         "reason_code": evaluation.get("reason_code", "internal_error"),
         "checked_fields": list(evaluation.get("checked_fields") or []),
     }
+    if isinstance(gate_ms, int) and gate_ms >= 0:
+        item["gate_ms"] = gate_ms
+    return item
 
 
 def append_record(path, item):
