@@ -24,6 +24,8 @@ rather than PASS. Vendors are not named here; details are under
 
 Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.md) for the step-by-step Windows guide and contract templates.
 
+Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is stored, and where your data goes.
+
 ## Scan a disposable MCP test account (under five minutes)
 
 Python 3.10+. Install the v0.2.0 release:
