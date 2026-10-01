@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import baseline  # noqa: E402
 import classify  # noqa: E402
+import launch  # noqa: E402
 import observe  # noqa: E402
 import outcome  # noqa: E402
 import verdict  # noqa: E402
@@ -241,7 +242,7 @@ def run_proxy(target_cmd,loaded_baseline=None,server_label=DEFAULT_SERVER_LABEL,
               outcome_contracts=None,outcome_mode="shadow",outcome_log_path=None):
     # The verifier subprocess still receives the full environment (outcome.evaluate).
     server_env=_server_env(outcome.secret_env_names(outcome_contracts))
-    proc=subprocess.Popen(target_cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,bufsize=0,env=server_env)
+    proc=subprocess.Popen(launch.resolve_command(target_cmd,server_env),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=None,bufsize=0,env=server_env)
     tracker=CallTracker()
     t1=threading.Thread(target=_pump,args=(0,proc.stdin),kwargs={"on_eof":lambda:_close_quietly(proc.stdin),"on_line":tracker.track_request},daemon=True)
     t2=threading.Thread(target=_pump_responses,args=(proc.stdout.fileno(),1,tracker,loaded_baseline,server_label),
