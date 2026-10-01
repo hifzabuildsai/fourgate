@@ -8,13 +8,13 @@ machines. [`SECURITY.md`](SECURITY.md) has the full data-flow detail.
 
 - Fourgate runs **entirely on your machines** (a laptop, a server, or your CI).
   There is no Fourgate cloud service, account, database or telemetry.
-- Fourgate **never needs your credentials**. You set them as environment
+- Fourgate **never stores your credentials**. You set them as environment
   variables on your side; they are never written to contracts, logs or the
   summary page.
 - Nothing is sent to Fourgate. You decide what, if anything, to share with us,
   and the summary page is built to be shareable.
-- In shadow mode (the pilot default), your agent receives **exactly the same
-  bytes** it would without Fourgate. If anything in Fourgate fails, the call
+- In shadow mode (the pilot default, without the legacy `--baseline` flag),
+  your agent receives **exactly the same bytes** it would without Fourgate. If anything in Fourgate fails, the call
   passes through unchanged.
 
 ## What runs where
@@ -61,8 +61,9 @@ your MCP client back at the original server command, and delete these files.
 
 - The MCP server keeps its own write credential, exactly as today.
 - The verifier uses a **separate, read-only** credential that you create.
-  `verifier.secret_env` removes it from the MCP server's environment, so the
-  server under test cannot see or use it.
+  When you list its variable name in `verifier.secret_env`, `wrap.py` removes
+  it from the MCP server's environment, so the server under test cannot see
+  or use it.
 - Both are environment variables you set yourself. Contracts, logs and the
   summary page contain only the variable **names**; the verifier reads the
   token value from its environment at call time and sends it only to the
