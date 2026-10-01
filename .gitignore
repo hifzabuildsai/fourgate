@@ -10,3 +10,5 @@ dist/
 .DS_Store
 fourgate-report.json
 fourgate-report.html
+.mcp-venvs/
+.pytest_cache/

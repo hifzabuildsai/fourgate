@@ -46,6 +46,25 @@ configured endpoint; no scan telemetry is sent to Fourgate. See
 [`SECURITY.md`](SECURITY.md). The GitHub contract is a template that still
 requires a disposable repository, tokens, and real end-to-end acceptance.
 
+## Run in CI
+
+[`examples/ci/fourgate-scan.yml`](examples/ci/fourgate-scan.yml) is a
+copy-paste GitHub Actions workflow for your own repository. It installs
+Fourgate from a release tag, runs `fourgate scan` on manual dispatch, uploads
+the JSON/HTML reports as a workflow artifact, and fails the job on any FAIL or
+UNKNOWN (non-zero exit). Edit the marked values: contract path, the
+`--confirm-test-account` label (must equal `server.test_account`), and the
+environment variable names. The MCP server's write credential and the
+read-back token come from two separate secrets, `FOURGATE_MCP_WRITE_TOKEN` and
+`FOURGATE_READBACK_TOKEN`, mapped to separate environment variables.
+
+Every run performs real contracted writes: target a disposable test account
+only. Workflow artifacts are readable by anyone with read access to the
+repository, so use a private repository and review reports before sharing.
+Fourgate's own CI runs the template's steps against the bundled demo fixture
+(broken exits 1, healthy exits 0); the template has not yet been run against a
+hosted connector.
+
 ## Outcome Guard MVP
 
 The current pitch-ready slice protects explicitly contracted state-changing MCP tools. After a connector reports success, Fourgate extracts only the minimum contract-approved fields and runs a deterministic authoritative verifier. No LLM makes the runtime PASS/FAIL decision.
