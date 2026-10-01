@@ -253,7 +253,7 @@ def render_html(summary):
     body = f"""<main>
 <h1>Fourgate outcome summary</h1>
 <p class="sub">Did the writes your agent reported as done actually land? Each protected call below was checked
-against the system of record with a separate read credential.</p>
+against the system of record by an independent read-back.</p>
 <p class="muted">Period: {period} &middot; Servers: {servers} &middot; Generated {generated}</p>
 <div class="tiles">{"".join(tiles)}</div>
 {skipped}
