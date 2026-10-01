@@ -103,8 +103,13 @@ as `fourgate scan`. A confirmed result prints `{"status":"pass"}` or
 structural evidence only (method, status, attempts, response paths). Any
 uncertainty (401/403, an unconfigured status, timeout, missing credential,
 invalid config or input) prints nothing and exits nonzero, which `wrap.py`
-records as UNKNOWN (`verifier_error`). This has been tested against a
-loopback server only; it has not yet been run against the hosted connector.
+records as UNKNOWN (`verifier_error`). This was first tested against a
+loopback server. Operator-reported: on Oct 1 2026, a real agent client
+(Claude Code) made two protected send calls through `wrap.py` in shadow mode
+against a hosted email-sending MCP server on a disposable account, with
+`secret_env` withholding the read-back key from the connector;
+`outcomes.jsonl` recorded `pass / postcondition_satisfied` for both,
+shape-only.
 
 1. Start from a scan case that already returned PASS on the disposable
    account. Copy its `readback` object unchanged into `readback.json`, except
@@ -174,6 +179,10 @@ loopback server only; it has not yet been run against the hosted connector.
   work management) with deliberately invalid credentials found write tools
   returning API failures as successful tool results (no `isError`), each
   reproduced at least twice; bug reports filed upstream.
+- Measured on the operator's Windows laptop, `verify_http` took 1.2–1.6 s per
+  call (Python start + TLS + GET), and the first cold call exceeded the 1.5 s
+  read-back budget; the 2000 ms runtime verifier cap leaves little headroom
+  on high-latency networks.
 - The `test_account` label is an explicit human attestation, not an account
   sandbox. A wrongly configured server can still mutate a production account.
 - Generic HTTP 404 becomes FAIL only with explicit `missing_statuses`;
