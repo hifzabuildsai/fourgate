@@ -121,7 +121,7 @@ def test_runtime_contract_is_strict_and_doctor_ready(tmp_path):
     path = runner.write_contract(tmp_path)
     loaded = outcome.load_strict(str(path))
     contract = loaded["tools"]["create_issue"]
-    assert contract["verifier"] == {"command": ["{python}", "-m", "fourgate.demo.verifier"], "timeout_ms": 1000}
+    assert contract["verifier"] == {"command": ["{python}", "-m", "fourgate.demo.verifier"], "timeout_ms": 2000}
     assert contract["allowed_failure_reasons"] == ["record_missing", "field_mismatch"]
     assert contract["recovery"] == "stop"
     env = runner.child_env(tmp_path / "store.json", "broken", "normal")
@@ -131,6 +131,26 @@ def test_runtime_contract_is_strict_and_doctor_ready(tmp_path):
     stdout = result.stdout.decode("ascii")
     assert result.returncode == 0, stdout
     assert "[ OK ] create_issue is advertised by the server" in stdout
+
+
+def test_relative_out_in_process(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    rc = cli.main(["demo", "--out", "demo-output"])
+    assert rc == 0, capsys.readouterr().out
+    out = tmp_path / "demo-output"
+    assert _tuples(out)[0] == EXPECTED
+    assert (out / runner.PAGE_NAME).is_file()
+
+
+def test_relative_out_subprocess(tmp_path):
+    # The CI step: a relative --out from the caller's cwd; guard children run elsewhere.
+    env = dict(os.environ, PYTHONPATH=str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""))
+    result = subprocess.run([sys.executable, "-m", "fourgate", "demo", "--out", "demo-output"],
+                            stdin=subprocess.DEVNULL, capture_output=True, timeout=RUN_TIMEOUT, env=env, cwd=tmp_path)
+    assert result.returncode == 0, result.stdout.decode("ascii", "replace")
+    out = tmp_path / "demo-output"
+    assert _tuples(out)[0] == EXPECTED
+    assert (out / runner.PAGE_NAME).is_file()
 
 
 @pytest.mark.parametrize("pace", ["-1", "10.5", "abc"])

@@ -105,7 +105,7 @@ def runtime_contract():
                     "issue_id": {"source": "result", "path": "result.structuredContent.issue_id"},
                     "title": {"source": "arguments", "path": "title"},
                 },
-                "verifier": {"command": ["{python}", "-m", "fourgate.demo.verifier"], "timeout_ms": 1000},
+                "verifier": {"command": ["{python}", "-m", "fourgate.demo.verifier"], "timeout_ms": 2000},
                 "allowed_failure_reasons": ["record_missing", "field_mismatch"],
                 "recovery": "stop",
             }
@@ -397,7 +397,8 @@ def _describe_error(response):
 
 def main(argv):
     args = build_parser().parse_args(argv)
-    out_dir = Path(args.out)
+    # Absolute once, up front: guard runs in another cwd and must get absolute paths.
+    out_dir = Path(args.out).resolve()
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
         # Truncate: each run's log holds exactly this run's records.
@@ -415,7 +416,8 @@ def main(argv):
     _say("which reads the system of record back after the connector reports success.")
     _say()
     with tempfile.TemporaryDirectory(prefix="fourgate-demo-", ignore_cleanup_errors=True) as work:
-        demo = Demo(out_dir, args.pace, Path(work))
+        work = Path(work).resolve()
+        demo = Demo(out_dir, args.pace, work)
         demo.beat()
         demo.beat()
         demo.contracts = write_contract(work)
