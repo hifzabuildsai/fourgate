@@ -8,7 +8,14 @@ Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.m
 
 ## Scan a disposable MCP test account (under five minutes)
 
-From a clean checkout with Python 3.10+:
+Python 3.10+. Install the v0.2.0 release:
+
+```bash
+python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.2.0"
+```
+
+Or, from a clean checkout of this repository (the bundled fixture below needs
+the checkout):
 
 ```bash
 python -m pip install .
@@ -104,6 +111,39 @@ python wrap/wrap.py \
 
 Switch to `--outcome-mode enforce` only for human-approved contracts after shadow traffic is clean.
 
+For a hosted connector, the verifier can be the scan's own HTTP read-back:
+`python -m fourgate.verify_http readback.json` takes the extracted fields on
+stdin and runs the same bounded GET as `fourgate scan`. Any uncertainty exits
+nonzero and is recorded as UNKNOWN. `verifier.secret_env` names the read
+credential's environment variables; `wrap.py` removes them from the wrapped
+server's environment while the verifier still receives them:
+
+```json
+{
+  "contract_version": 1,
+  "tools": {
+    "create_issue": {
+      "extract": {
+        "issue_id": {"source": "result", "path": "result.structuredContent.issue_id"},
+        "title": {"source": "arguments", "path": "title"}
+      },
+      "verifier": {
+        "command": ["{python}", "-m", "fourgate.verify_http", "readback.json"],
+        "cwd": ".",
+        "timeout_ms": 2000,
+        "secret_env": ["READBACK_TOKEN"]
+      },
+      "allowed_failure_reasons": ["field_mismatch"],
+      "recovery": "stop"
+    }
+  }
+}
+```
+
+`readback.json` is a scan contract `readback` object with `timeout_ms` of at
+most 1500. Step-by-step setup and the verifier dry run are in
+[`HANDOFF.md` → Shadow mode with a real connector](HANDOFF.md#shadow-mode-with-a-real-connector).
+
 See [`specs/outcome-guard-mvp.md`](specs/outcome-guard-mvp.md) for the contract and failure semantics.
 
 ## Existing components
@@ -120,7 +160,7 @@ The existing `silent_empty` behavior remains deliberately narrow. Fourgate does 
 
 ## Field evidence
 
-The original field run observed 24 real `tools/call` results and zero `silent_empty` events. Four observed failures happened before `tools/call` at spawn/connect/discovery/configuration. That weakens the original empty-payload wedge; it does not validate Outcome Guard. Outcome Guard now needs real shadow-mode traffic and reproducible false-success incidents.
+The original field run observed 24 real `tools/call` results and zero `silent_empty` events. Four observed failures happened before `tools/call` at spawn/connect/discovery/configuration. That weakens the original empty-payload wedge; it does not validate Outcome Guard on its own.
 
 ### Hosted scan validation (2026-09-30)
 
@@ -132,23 +172,45 @@ evidence. A manual search of the generated reports found neither tested API
 credential. No naturally occurring false-success incident was observed. This
 single integration does not establish production reliability.
 
+### Runtime shadow run (2026-10-01)
+
+Operator-reported: a real agent client made two protected send calls through
+`wrap.py` in shadow mode against the same hosted email-sending MCP server on a
+disposable account, verified by `fourgate.verify_http` with `secret_env`
+withholding the read-back key from the connector. `outcomes.jsonl` recorded
+`pass / postcondition_satisfied` for both. Two calls is a smoke test, not
+production traffic.
+
+### Errors returned as success
+
+Operator scans of three official company MCP servers (hosting, payments, work
+management), using deliberately invalid credentials so nothing could be
+created, found write tools returning API failures as successful tool results
+with no `isError`. Fourgate reports these as `UNKNOWN /
+success_without_record_id`. Each was reproduced at least twice and reported
+upstream. These are error-reporting bugs: no read-back-proven silent success
+(a write reported as done whose record is missing or wrong) has been observed
+yet.
+
 ## Current limitations
 
 - Outcome contracts are hand-authored and human-approved; generation is not implemented.
-- The MVP verifier adapter is a local command protocol. Production database/API adapters are not implemented yet.
-- Outcome verification adds the verifier's declared read-back latency. It has an explicit per-contract timeout (MVP cap: 2000 ms) and fails open on uncertainty.
-- Only command-configured local stdio MCP servers are covered by this implementation.
+- Runtime verifiers are local commands. The bundled one, `fourgate.verify_http`, is a generic HTTP GET read-back with optional Bearer token; there are no database adapters.
+- Outcome verification adds read-back latency on the protected call. The runtime caps each verifier at 2000 ms and fails open (UNKNOWN) on uncertainty. `verify_http` measured 1.2–1.6 s per call on a Windows laptop, and a first cold call exceeded its budget, so headroom is small on slow networks.
+- Only command-configured local stdio MCP servers are covered (scanner and runtime); no remote MCP transport.
 - No dashboard, alerting product, gateway, retry engine, or automatic compensation.
-- Preflight still pins `mcp==1.9.4` and uses the older protocol version in its test handshake.
+- Preflight's test handshake uses an older MCP protocol version, and its tests need the `mcp==1.9.4` dev dependency.
 
 ## Tests
 
 ```bash
-pytest -q tests/test_outcome_guard.py
+python -m pip install -e ".[dev]"
+python -m pytest -q
 python wrap/wrap.py --selfcheck
 ```
 
-The historical full suite additionally requires the repository's declared `mcp==1.9.4` dependency.
+The `dev` extra installs `pytest` and the `mcp==1.9.4` package that the
+preflight tests need.
 
 ## License
 
