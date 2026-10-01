@@ -44,6 +44,12 @@ jobs:
       - name: Doctor preflight on the demo fixture
         run: fourgate doctor --contracts fixtures/contracts/outcome_demo.json -- python fixtures/outcome_server.py
 
+      - name: Run the product demo
+        run: fourgate demo --out demo-output
+
+      - name: Check the demo summary page
+        run: python -c "import pathlib, sys; p = pathlib.Path('demo-output/fourgate-demo-summary.html'); sys.exit(0 if p.is_file() else 'missing ' + str(p))"
+
       - name: Run runtime self-check
         run: python wrap/wrap.py --selfcheck
 
