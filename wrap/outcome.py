@@ -24,6 +24,7 @@ VALID_MODES = {"shadow", "enforce"}
 MAX_VERIFIER_TIMEOUT_MS = 2000  # explicit per-contract cap for authoritative read-back
 MAX_TEXT_SELECTOR_CHARS = 8192
 MAX_REGEX_PATTERN_CHARS = 256
+ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*$")
 
 
 class _Missing:
@@ -49,8 +50,25 @@ def load(path):
     ):
         print(f"fourgate: outcome contracts {path!r} are invalid — outcome guard disabled", file=sys.stderr)
         return None
+    for contract in data["tools"].values():
+        verifier = contract.get("verifier") if isinstance(contract, dict) else None
+        names = verifier.get("secret_env", []) if isinstance(verifier, dict) else []
+        if not isinstance(names, list) or not all(isinstance(n, str) and ENV_NAME.fullmatch(n) for n in names):
+            print(f"fourgate: outcome contracts {path!r} have an invalid verifier.secret_env — outcome guard disabled",
+                  file=sys.stderr)
+            return None
     data["_contract_dir"] = os.path.dirname(os.path.abspath(path))
     return data
+
+
+def secret_env_names(contracts):
+    """Verifier-only env var names that the wrapped server must not inherit."""
+    names = set()
+    for contract in (contracts or {}).get("tools", {}).values():
+        verifier = contract.get("verifier") if isinstance(contract, dict) else None
+        if isinstance(verifier, dict):
+            names.update(verifier.get("secret_env", []))
+    return names
 
 
 def lookup(contracts, tool_name):
