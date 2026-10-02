@@ -28,16 +28,25 @@ Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is sto
 
 ## Scan a disposable MCP test account (under five minutes)
 
-Python 3.10–3.13, Linux or Windows. Install the v0.3.0 release:
+Python 3.10–3.13, Linux or Windows. Install from
+[PyPI](https://pypi.org/project/fourgate/):
+
+```bash
+python -m pip install fourgate
+```
+
+Check the install with `fourgate --version`. If the `fourgate` command is not
+found on PATH, `python -m fourgate` works the same way.
+
+Alternatively, install the v0.3.0 tag from GitHub:
 
 ```bash
 python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.3.0"
 ```
 
-The built wheel is also attached to the
+or the wheel attached to the
 [v0.3.0 GitHub Release](https://github.com/hifzabuildsai/fourgate/releases/tag/v0.3.0)
-(`python -m pip install fourgate-0.3.0-py3-none-any.whl`). Fourgate is not on
-PyPI yet. Check the install with `fourgate --version`.
+(`python -m pip install fourgate-0.3.0-py3-none-any.whl`).
 
 Or, from a clean checkout of this repository (the bundled fixture below needs
 the checkout):
