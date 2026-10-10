@@ -32,33 +32,7 @@ The runtime flow below uses a local stdio MCP server and the bundled HTTP
 read-back verifier. Verification runs **after the tool response**, for
 explicitly contracted tools; no LLM decides PASS / FAIL / UNKNOWN.
 
-```mermaid
-flowchart TD
-    subgraph local["Operator machine or CI runner"]
-        agent["AI agent / MCP client"]
-        guard["fourgate guard"]
-        server["Local stdio MCP server"]
-        contracts["Human-approved runtime contracts"]
-        verifier["Local verifier: fourgate.verify_http"]
-        log["outcomes.jsonl"]
-        summary["Local HTML summary"]
-
-        agent -->|MCP request| guard
-        guard -->|Forward request over stdio| server
-        server -->|Tool response| guard
-        contracts -.->|Extraction and verifier rules| guard
-        guard -->|Contract-selected fields| verifier
-        verifier -->|PASS / FAIL / UNKNOWN| guard
-        guard -->|Response per mode| agent
-        guard -->|Structural verdict metadata| log
-        log -->|fourgate summary| summary
-    end
-
-    record["System of record / provider API"]
-    server -->|Provider write| record
-    verifier -->|Independent HTTPS GET| record
-    record -->|Read-back state| verifier
-```
+![Fourgate runtime architecture: local guard, independent HTTP read-back, and local outcome evidence](docs/assets/fourgate-architecture.svg)
 
 - **Shadow (default):** record the verdict and preserve the original response.
 - **Enforce:** prepend an attributed verdict only on a confirmed FAIL,
