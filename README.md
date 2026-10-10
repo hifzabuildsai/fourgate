@@ -30,9 +30,16 @@ Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is sto
 
 The runtime flow below uses a local stdio MCP server and the bundled HTTP
 read-back verifier. Verification runs **after the tool response**, for
-explicitly contracted tools; no LLM decides PASS / FAIL / UNKNOWN.
+explicitly contracted tools; no LLM decides PASS / FAIL / UNKNOWN. The diagram
+shows a configured `outcomes.jsonl` log.
 
-![Fourgate runtime architecture: local guard, independent HTTP read-back, and local outcome evidence](docs/assets/fourgate-architecture.svg)
+![Fourgate runtime processes: local stdio request and response paths, guard-owned verification and logging, and the external provider API](docs/assets/fourgate-architecture.svg)
+
+The guard correlates requests with results and sends only contract-selected
+fields to the verifier after a reported success. The verifier returns a typed
+PASS or FAIL reply; the guard maps verifier faults and uncertainty to UNKNOWN,
+applies the response mode, and records structural outcome metadata. Without
+`--log`, outcome records go to stderr instead of the file shown above.
 
 - **Shadow (default):** record the verdict and preserve the original response.
 - **Enforce:** prepend an attributed verdict only on a confirmed FAIL,

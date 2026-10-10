@@ -1,84 +1,104 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title description">
-  <title id="title">Fourgate runtime architecture</title>
-  <desc id="description">Your agent calls a local MCP server through fourgate guard. After a contracted tool reports success, the guard extracts contract-selected fields and runs the local HTTP verifier. The verifier independently reads the system of record using HTTPS GET and produces PASS, FAIL, or UNKNOWN. The guard records structural verdict metadata to a configured local outcomes.jsonl file; fourgate summary renders that file as local HTML. The response follows shadow or enforce mode, as described below the diagram. UNKNOWN is never PASS.</desc>
-  <!-- Static adaptation of fourgate-site/src/components/FlowDiagram.tsx.
-       Colors match the website's dark theme. Response handling and credential
-       boundaries are described in README.md; arrows show the main data flow. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="818" viewBox="0 0 1200 818" role="img" aria-labelledby="title description">
+  <title id="title">Fourgate runtime processes and verification boundary</title>
+  <desc id="description">The agent, guard, wrapped stdio MCP server, HTTP verifier subprocess, and local outcome files run on the operator machine or CI runner. The MCP server owns writes to the external provider API. The guard correlates tool requests with results and, after a contracted success result, sends only selected fields to the HTTP verifier. The verifier independently reads authoritative state with HTTPS GET. The guard accepts typed PASS or FAIL replies and maps verifier faults or uncertainty to UNKNOWN, applies shadow or enforce response policy, and writes structural outcome metadata. A configured outcomes.jsonl file feeds the local HTML summary. Listed verifier secret environment variables are withheld from the wrapped MCP server.</desc>
+  <!-- Runtime-only view: fourgate guard, without the legacy baseline classifier.
+       Dark palette matches Fourgate; this is a static process and data-flow diagram.
+       The guard owns UNKNOWN normalization, response policy, and outcome logging. -->
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 10 5 0 10Z" fill="#a1a1a1"/>
     </marker>
   </defs>
+  <rect x="1" y="1" width="1198" height="816" rx="20" fill="#000000" stroke="#262626" stroke-width="2"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="32" y="46" fill="#ededed" font-size="27" font-weight="600">Fourgate runtime architecture</text>
+    <text x="32" y="78" fill="#a1a1a1" font-size="19">Local stdio MCP · independent HTTP read-back · local evidence</text>
+  </g>
 
-  <rect x="1" y="1" width="1198" height="618" rx="20" fill="#0a0a0a" stroke="#262626" stroke-width="2"/>
+  <rect x="24" y="106" width="855" height="668" rx="16" fill="#0a0a0a" stroke="#3d3d3d" stroke-width="1.5"/>
+  <g font-family="monospace" font-size="17" fill="#a1a1a1">
+    <text x="48" y="141">LOCAL MACHINE / CI RUNNER</text>
+    <text x="947" y="141">EXTERNAL API</text>
+  </g>
 
-  <!-- Requests and the MCP server's own write. -->
+  <!-- Bidirectional MCP path: request forwarded; result evaluated before response. -->
   <g fill="none" stroke="#a1a1a1" stroke-width="1.8" marker-end="url(#arrow)">
-    <path d="M248 95H334"/>
-    <path d="M556 95H642"/>
-    <path d="M864 95H950"/>
-    <path d="M445 148V246"/>
-    <path d="M445 352V450"/>
-    <path d="M556 503H642"/>
-    <path d="M864 503H950"/>
-    <path d="M556 299H1061V148" stroke-dasharray="7 6"/>
+    <path d="M224 228H308"/>
+    <path d="M308 280H224"/>
+    <path d="M562 228H650"/>
+    <path d="M650 280H562"/>
+    <path d="M860 228H952"/>
+    <path d="M390 326V454"/>
+    <path d="M480 454V326"/>
+    <path d="M314 306H149V454"/>
+    <path d="M149 604V660"/>
+    <path d="M562 526H1067V400" stroke-dasharray="7 6" marker-start="url(#arrow)"/>
   </g>
-  <g fill="#a1a1a1" font-family="monospace" font-size="15" text-anchor="middle">
-    <text x="291" y="80">tools/call</text>
-    <text x="599" y="80">unchanged</text>
-    <text x="907" y="80">write</text>
-    <text x="462" y="198" text-anchor="start">contracted fields only</text>
-    <text x="823" y="280">independent read-only GET</text>
-    <text x="599" y="488">metadata</text>
-    <text x="907" y="488">HTML</text>
+  <g font-family="monospace" font-size="15" fill="#a1a1a1" text-anchor="middle">
+    <text x="266" y="213">tools/call</text>
+    <text x="266" y="265">per mode</text>
+    <text x="606" y="213">stdio</text>
+    <text x="606" y="265">result</text>
+    <text x="906" y="213">write</text>
+    <text x="373" y="387" text-anchor="end">selected fields</text>
+    <text x="498" y="377" text-anchor="start">reply / fault</text>
+    <text x="498" y="403" text-anchor="start">back to guard</text>
+    <text x="168" y="405" text-anchor="start">metadata</text>
+    <text x="168" y="638" text-anchor="start">summary CLI</text>
+    <text x="824" y="506" font-size="17">HTTPS GET + read-back state</text>
   </g>
 
-  <!-- Existing systems have subdued borders; Fourgate parts have brighter borders. -->
-  <g fill="#000000" stroke="#3d3d3d" stroke-width="1.5">
-    <rect x="32" y="48" width="210" height="94" rx="14"/>
-    <rect x="648" y="48" width="210" height="94" rx="14"/>
-    <rect x="956" y="48" width="210" height="94" rx="14"/>
-  </g>
-  <g fill="#000000" stroke="#878787" stroke-width="1.8">
-    <rect x="340" y="48" width="210" height="94" rx="14"/>
-    <rect x="340" y="252" width="210" height="94" rx="14"/>
-    <rect x="340" y="456" width="210" height="94" rx="14"/>
-    <rect x="648" y="456" width="210" height="94" rx="14"/>
-    <rect x="956" y="456" width="210" height="94" rx="14"/>
+  <!-- Each card is a process or artifact, not a UI control. -->
+  <g fill="#000000" stroke="#878787" stroke-width="1.5">
+    <rect x="48" y="190" width="170" height="110" rx="12"/>
+    <rect x="314" y="174" width="242" height="146" rx="12"/>
+    <rect x="656" y="190" width="198" height="110" rx="12"/>
+    <rect x="958" y="174" width="218" height="220" rx="12"/>
+    <rect x="314" y="460" width="242" height="138" rx="12"/>
+    <rect x="48" y="460" width="202" height="138" rx="12"/>
+    <rect x="48" y="666" width="202" height="84" rx="12"/>
   </g>
   <g font-family="Arial, Helvetica, sans-serif" text-anchor="middle">
     <g fill="#ededed" font-size="22" font-weight="600">
-      <text x="137" y="88">Your agent</text>
-      <text x="445" y="88">fourgate guard</text>
-      <text x="753" y="88">Your MCP server</text>
-      <text x="1061" y="88">System of record</text>
-      <text x="445" y="292">Verifier</text>
-      <text x="445" y="496">Verdict</text>
-      <text x="753" y="496">outcomes.jsonl</text>
-      <text x="1061" y="496">fourgate summary</text>
+      <text x="133" y="234">Agent</text>
+      <text x="435" y="207">fourgate guard</text>
+      <text x="755" y="234">MCP server</text>
+      <text x="1067" y="207">System of record</text>
+      <text x="435" y="493">HTTP verifier</text>
+      <text x="149" y="493">Outcome log</text>
+      <text x="149" y="701" font-size="21">HTML summary</text>
     </g>
     <g fill="#a1a1a1" font-size="18">
-      <text x="137" y="116">MCP client</text>
-      <text x="445" y="116">local process</text>
-      <text x="753" y="116">no code changes</text>
-      <text x="1061" y="116">the API you write to</text>
-      <text x="445" y="320">local HTTP, no LLM</text>
-      <text x="753" y="524">local file</text>
-      <text x="1061" y="524">local page</text>
+      <text x="133" y="265">MCP client</text>
+      <text x="435" y="235">correlate request + result</text>
+      <text x="435" y="261">contract + response policy</text>
+      <text x="755" y="265">owns the write</text>
+      <text x="1067" y="239">authoritative state</text>
+      <text x="1067" y="292">Write: server credential</text>
+      <text x="1067" y="322">Read: verifier credential</text>
+      <text x="435" y="548">deterministic, no LLM</text>
+      <text x="435" y="578" font-size="16">verifier budget ≤ 2000 ms</text>
+      <text x="149" y="548">structural metadata only</text>
     </g>
   </g>
+  <g font-family="monospace" font-size="16" fill="#a1a1a1" text-anchor="middle">
+    <text x="435" y="521">fourgate.verify_http</text>
+    <text x="149" y="521">outcomes.jsonl</text>
+    <text x="149" y="729">fourgate summary</text>
+  </g>
   <g font-family="monospace" font-size="16">
-    <text x="350" y="524" fill="#3fcf7f">PASS</text>
-    <text x="397" y="524" fill="#a1a1a1">/</text>
-    <text x="414" y="524" fill="#ff6166">FAIL</text>
-    <text x="460" y="524" fill="#a1a1a1">/</text>
-    <text x="477" y="524" fill="#f5a524">UNKNOWN</text>
+    <text x="340" y="294" fill="#3fcf7f">PASS</text>
+    <text x="387" y="294" fill="#a1a1a1">/</text>
+    <text x="404" y="294" fill="#ff6166">FAIL</text>
+    <text x="450" y="294" fill="#a1a1a1">/</text>
+    <text x="467" y="294" fill="#f5a524">UNKNOWN</text>
   </g>
 
-  <g font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#a1a1a1">
-    <rect x="32" y="581" width="14" height="14" rx="3" fill="#000000" stroke="#878787" stroke-width="1.8"/>
-    <text x="57" y="594">Fourgate, on your machine or CI runner</text>
-    <rect x="405" y="581" width="14" height="14" rx="3" fill="#000000" stroke="#3d3d3d" stroke-width="1.5"/>
-    <text x="430" y="594">Your existing systems</text>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#a1a1a1" font-size="18">
+    <text x="314" y="652" fill="#ededed" font-weight="600">Verification boundary</text>
+    <text x="314" y="684">Human-approved contracts select fields and read-back rules.</text>
+    <text x="314" y="712">Listed read secret env vars are withheld from the MCP server.</text>
+    <text x="314" y="740">No hosted Fourgate service. No rollback or write retry.</text>
+    <text x="32" y="805" font-size="17">Shadow preserves the response. Enforce adds a verdict only on FAIL. UNKNOWN fails open; never PASS.</text>
   </g>
 </svg>
