@@ -26,6 +26,56 @@ Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.m
 
 Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is stored, and where your data goes.
 
+## System architecture
+
+The runtime flow below uses a local stdio MCP server and the bundled HTTP
+read-back verifier. Verification runs **after the tool response**, for
+explicitly contracted tools; no LLM decides PASS / FAIL / UNKNOWN.
+
+```mermaid
+flowchart TD
+    subgraph local["Operator machine or CI runner"]
+        agent["AI agent / MCP client"]
+        guard["fourgate guard"]
+        server["Local stdio MCP server"]
+        contracts["Human-approved runtime contracts"]
+        verifier["Local verifier: fourgate.verify_http"]
+        log["outcomes.jsonl"]
+        summary["Local HTML summary"]
+
+        agent -->|MCP request| guard
+        guard -->|Forward request over stdio| server
+        server -->|Tool response| guard
+        contracts -.->|Extraction and verifier rules| guard
+        guard -->|Contract-selected fields| verifier
+        verifier -->|PASS / FAIL / UNKNOWN| guard
+        guard -->|Response per mode| agent
+        guard -->|Structural verdict metadata| log
+        log -->|fourgate summary| summary
+    end
+
+    record["System of record / provider API"]
+    server -->|Provider write| record
+    verifier -->|Independent HTTPS GET| record
+    record -->|Read-back state| verifier
+```
+
+- **Shadow (default):** record the verdict and preserve the original response.
+- **Enforce:** prepend an attributed verdict only on a confirmed FAIL,
+  preserving the original content. PASS and UNKNOWN pass through unchanged.
+- **Uncertainty:** verifier faults or timeouts produce UNKNOWN and fail open;
+  each runtime verifier is capped at 2000 ms. UNKNOWN is never PASS.
+
+Read credentials come from environment variables; list their names in
+`verifier.secret_env` to withhold them from the wrapped MCP server. HTTP
+read-back contacts the configured provider API; Fourgate has no hosted
+endpoint or telemetry. Checks do not undo a write or retry it.
+
+`fourgate scan` uses the same HTTP read-back implementation for contracted
+writes against **authorized disposable accounts**, with local JSON/HTML
+reports. See [`PILOT.md`](PILOT.md) for pilot setup and
+[`SECURITY.md`](SECURITY.md) for data flow and report-sharing limits.
+
 ## Scan a disposable MCP test account (under five minutes)
 
 Python 3.10–3.13, Linux or Windows. Install from
