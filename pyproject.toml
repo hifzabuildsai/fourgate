@@ -36,4 +36,6 @@ packages = ["fourgate", "fourgate.demo", "wrap"]
 version = {attr = "fourgate.__version__"}
 
 [project.optional-dependencies]
-dev = ["pytest", "mcp==1.9.4"]
+# The legacy MCP test fixture imports eval_type_backport from Pydantic's
+# internals; Pydantic 2.14 removed it. Keep this constraint dev-only.
+dev = ["pytest", "mcp==1.9.4", "pydantic<2.14"]
