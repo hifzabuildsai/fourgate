@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title description">
+  <title id="title">Fourgate runtime architecture</title>
+  <desc id="description">Your agent calls a local MCP server through fourgate guard. After a contracted tool reports success, the guard extracts contract-selected fields and runs the local HTTP verifier. The verifier independently reads the system of record using HTTPS GET and produces PASS, FAIL, or UNKNOWN. The guard records structural verdict metadata to a configured local outcomes.jsonl file; fourgate summary renders that file as local HTML. The response follows shadow or enforce mode, as described below the diagram. UNKNOWN is never PASS.</desc>
+  <!-- Static adaptation of fourgate-site/src/components/FlowDiagram.tsx.
+       Colors match the website's dark theme. Response handling and credential
+       boundaries are described in README.md; arrows show the main data flow. -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#a1a1a1"/>
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="1198" height="618" rx="20" fill="#0a0a0a" stroke="#262626" stroke-width="2"/>
+
+  <!-- Requests and the MCP server's own write. -->
+  <g fill="none" stroke="#a1a1a1" stroke-width="1.8" marker-end="url(#arrow)">
+    <path d="M248 95H334"/>
+    <path d="M556 95H642"/>
+    <path d="M864 95H950"/>
+    <path d="M445 148V246"/>
+    <path d="M445 352V450"/>
+    <path d="M556 503H642"/>
+    <path d="M864 503H950"/>
+    <path d="M556 299H1061V148" stroke-dasharray="7 6"/>
+  </g>
+  <g fill="#a1a1a1" font-family="monospace" font-size="15" text-anchor="middle">
+    <text x="291" y="80">tools/call</text>
+    <text x="599" y="80">unchanged</text>
+    <text x="907" y="80">write</text>
+    <text x="462" y="198" text-anchor="start">contracted fields only</text>
+    <text x="823" y="280">independent read-only GET</text>
+    <text x="599" y="488">metadata</text>
+    <text x="907" y="488">HTML</text>
+  </g>
+
+  <!-- Existing systems have subdued borders; Fourgate parts have brighter borders. -->
+  <g fill="#000000" stroke="#3d3d3d" stroke-width="1.5">
+    <rect x="32" y="48" width="210" height="94" rx="14"/>
+    <rect x="648" y="48" width="210" height="94" rx="14"/>
+    <rect x="956" y="48" width="210" height="94" rx="14"/>
+  </g>
+  <g fill="#000000" stroke="#878787" stroke-width="1.8">
+    <rect x="340" y="48" width="210" height="94" rx="14"/>
+    <rect x="340" y="252" width="210" height="94" rx="14"/>
+    <rect x="340" y="456" width="210" height="94" rx="14"/>
+    <rect x="648" y="456" width="210" height="94" rx="14"/>
+    <rect x="956" y="456" width="210" height="94" rx="14"/>
+  </g>
+  <g font-family="Arial, Helvetica, sans-serif" text-anchor="middle">
+    <g fill="#ededed" font-size="22" font-weight="600">
+      <text x="137" y="88">Your agent</text>
+      <text x="445" y="88">fourgate guard</text>
+      <text x="753" y="88">Your MCP server</text>
+      <text x="1061" y="88">System of record</text>
+      <text x="445" y="292">Verifier</text>
+      <text x="445" y="496">Verdict</text>
+      <text x="753" y="496">outcomes.jsonl</text>
+      <text x="1061" y="496">fourgate summary</text>
+    </g>
+    <g fill="#a1a1a1" font-size="18">
+      <text x="137" y="116">MCP client</text>
+      <text x="445" y="116">local process</text>
+      <text x="753" y="116">no code changes</text>
+      <text x="1061" y="116">the API you write to</text>
+      <text x="445" y="320">local HTTP, no LLM</text>
+      <text x="753" y="524">local file</text>
+      <text x="1061" y="524">local page</text>
+    </g>
+  </g>
+  <g font-family="monospace" font-size="16">
+    <text x="350" y="524" fill="#3fcf7f">PASS</text>
+    <text x="397" y="524" fill="#a1a1a1">/</text>
+    <text x="414" y="524" fill="#ff6166">FAIL</text>
+    <text x="460" y="524" fill="#a1a1a1">/</text>
+    <text x="477" y="524" fill="#f5a524">UNKNOWN</text>
+  </g>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#a1a1a1">
+    <rect x="32" y="581" width="14" height="14" rx="3" fill="#000000" stroke="#878787" stroke-width="1.8"/>
+    <text x="57" y="594">Fourgate, on your machine or CI runner</text>
+    <rect x="405" y="581" width="14" height="14" rx="3" fill="#000000" stroke="#3d3d3d" stroke-width="1.5"/>
+    <text x="430" y="594">Your existing systems</text>
+  </g>
+</svg>
