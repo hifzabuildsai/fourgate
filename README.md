@@ -130,8 +130,12 @@ The scanner supports stdio MCP servers and local command, generic HTTPS, or
 GitHub Issue read-back. HTTP/GitHub verification makes GET requests to the
 configured endpoint; no scan telemetry is sent to Fourgate. See
 [`specs/scan-contract-v1.md`](specs/scan-contract-v1.md) and
-[`SECURITY.md`](SECURITY.md). The GitHub contract is a template that still
-requires a disposable repository, tokens, and real end-to-end acceptance.
+[`SECURITY.md`](SECURITY.md). The GitHub contract remains a template: configure an authorized disposable
+repository and separate credentials, and replace placeholder tools/selectors
+after actual discovery. A bounded setup using the official local stdio GitHub
+MCP server completed local read-back and hosted CI validation on our disposable
+repository on 2026-10-11–12; see the
+[dated evidence note](docs/evidence/github-validation-2026-10-12.md).
 
 ## Run in CI
 
@@ -149,8 +153,14 @@ Every run performs real contracted writes: target a disposable test account
 only. Workflow artifacts are readable by anyone with read access to the
 repository, so use a private repository and review reports before sharing.
 Fourgate's own CI runs the template's steps against the bundled demo fixture
-(broken exits 1, healthy exits 0); the template has not yet been run against a
-hosted connector.
+(broken exits 1, healthy exits 0). On 2026-10-12, a manual-only adaptation ran
+on GitHub-hosted Ubuntu against the official local stdio GitHub MCP server and
+GitHub's live API in our private disposable repository: healthy PASS/exit 0/job
+success; induced FAIL and pre-write UNKNOWN each exit 1/job failure. Cleanup and
+reviewed report upload also ran after the negative exits.
+[Evidence and the initial cleanup-harness correction](docs/evidence/github-validation-2026-10-12.md)
+are recorded separately from the earlier vendor runs. **Customer CI validation
+remains pending.**
 
 ## Outcome Guard MVP
 
@@ -303,7 +313,18 @@ withholding the read-back key from the connector. `outcomes.jsonl` recorded
 `pass / postcondition_satisfied` for both. Two calls is a smoke test, not
 production traffic.
 
-### Errors returned as success
+### GitHub validation (2026-10-11–12)
+
+Reviewed local operator evidence reports two healthy issue/title read-backs and
+one real runtime shadow write as PASS, with same-call response preservation.
+Separately checked hosted Actions results show PASS/0/success and induced
+FAIL/1/failure and UNKNOWN/1/failure; the hosted UNKNOWN stopped before a write.
+The initial hosted cleanup harness failed and was corrected before the final
+runs. See the [dated, sanitized evidence note](docs/evidence/github-validation-2026-10-12.md)
+for provenance, private access requirements and limits. No natural silent-success
+finding was established; customer CI validation remains pending.
+
+### Errors returned as success (2026-10-01 snapshot)
 
 Operator scans of three official company MCP servers (hosting, payments, work
 management), using deliberately invalid credentials so nothing could be
