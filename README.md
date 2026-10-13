@@ -149,8 +149,8 @@ environment variable names. The MCP server's write credential and the
 read-back token come from two separate secrets, `FOURGATE_MCP_WRITE_TOKEN` and
 `FOURGATE_READBACK_TOKEN`, mapped to separate environment variables.
 
-Every run performs real contracted writes: target a disposable test account
-only. Workflow artifacts are readable by anyone with read access to the
+Scans can perform real contracted writes: target a disposable test account
+only. Credential prechecks can stop a scan before any write is sent. Workflow artifacts are readable by anyone with read access to the
 repository, so use a private repository and review reports before sharing.
 Fourgate's own CI runs the template's steps against the bundled demo fixture
 (broken exits 1, healthy exits 0). On 2026-10-12, a manual-only adaptation ran
