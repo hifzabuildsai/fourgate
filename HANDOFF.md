@@ -1,8 +1,12 @@
 # Fourgate engineering handoff
 
-Status: pre-alpha. Scan PRs #14–#21 are merged, and `v0.1.0` already exists.
-The operator reports hosted target validation on a disposable account,
-including denied read-back yielding UNKNOWN. Do not call this production-proven.
+Release: `v0.3.0` is on PyPI; product maturity remains early, pre-alpha.
+GitHub Issue read-back and founder-owned hosted CI validation are documented in
+[the dated evidence note](docs/evidence/github-validation-2026-10-12.md).
+Customer CI and production reliability remain unvalidated. The earlier release
+history and operator evidence below must be read with their dates and limits.
+See [the 22 October coverage audit](docs/evidence/engineering-2026-10-22.md) and
+[experimental coding-agent setup](docs/claude-code-setup.md) for the next slice.
 
 ## Purpose and supported path
 
@@ -177,7 +181,9 @@ shape-only.
   A successful write followed by a deliberately invalid independent read-back
   credential returned `UNKNOWN / readback_unconfirmed` after three GET attempts.
   These are operator-provided validation results, not a naturally occurring
-  false-success incident. The GitHub MCP template has not been run end-to-end.
+  false-success incident. A later adapted GitHub MCP setup completed bounded
+  issue/title E2E and founder-owned hosted CI controls on 11–12 October; see the
+  dated evidence note above. Customer CI remains pending.
 - Operator scans of three official company MCP servers (hosting, payments,
   work management) with deliberately invalid credentials found write tools
   returning API failures as successful tool results (no `isError`), each

@@ -26,6 +26,11 @@ Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.m
 
 Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is stored, and where your data goes.
 
+Using Claude Code for setup: the experimental
+[`fourgate-setup` project skill](docs/claude-code-setup.md) guides one local stdio
+workflow using the existing CLI. Installed-client and external live onboarding
+acceptance remain pending; installing Fourgate alone does not install the skill.
+
 ## System architecture
 
 The runtime flow below uses a local stdio MCP server and the bundled HTTP
