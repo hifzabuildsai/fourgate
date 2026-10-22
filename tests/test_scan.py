@@ -59,6 +59,47 @@ def test_verifier_timeout_is_unknown_never_pass(tmp_path):
         "create_issue", "UNKNOWN", "verifier_timeout")
 
 
+def test_write_timeout_stops_before_the_next_case(tmp_path):
+    # This server keeps reading calls but never answers them. It can expose an
+    # accidental second write; a server blocked inside its first call could not.
+    calls = tmp_path / "calls.jsonl"
+    server = tmp_path / "no_call_response.py"
+    server.write_text(
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "for raw in sys.stdin:\n"
+        "    msg = json.loads(raw)\n"
+        "    method = msg.get('method')\n"
+        "    if method == 'tools/call':\n"
+        f"        with Path({str(calls)!r}).open('a', encoding='utf-8') as f:\n"
+        "            f.write(json.dumps(msg['params']) + '\\n')\n"
+        "        continue\n"
+        "    if method == 'initialize':\n"
+        "        result = {'protocolVersion': '2024-11-05', 'capabilities': {},\n"
+        "                  'serverInfo': {'name': 'timeout-control', 'version': '1'}}\n"
+        "    elif method == 'tools/list':\n"
+        "        result = {'tools': [{'name': 'create_issue'}]}\n"
+        "    else:\n"
+        "        continue\n"
+        "    print(json.dumps({'jsonrpc': '2.0', 'id': msg['id'], 'result': result}), flush=True)\n",
+        encoding="utf-8",
+    )
+    contract = _contract(tmp_path, server_command=[sys.executable, str(server)])
+    data = json.loads(contract.read_text(encoding="utf-8"))
+    data["server"]["call_timeout_ms"] = 200
+    second_case = json.loads(json.dumps(data["cases"][0]))
+    second_case["arguments"]["title"] = "MUST-NOT-BE-SENT"
+    data["cases"].append(second_case)
+    contract.write_text(json.dumps(data), encoding="utf-8")
+    result = _run(contract, tmp_path / "store.json")
+    assert result.returncode == 1
+    rows = json.loads(result.stdout)["cases"]
+    assert len(rows) == 1
+    assert (rows[0]["status"], rows[0]["reason_code"]) == ("UNKNOWN", "TimeoutError")
+    observed = [json.loads(line) for line in calls.read_text(encoding="utf-8").splitlines()]
+    assert observed == [{"name": "create_issue", "arguments": data["cases"][0]["arguments"]}]
+
+
 def test_success_without_record_id_is_unknown_without_readback(tmp_path):
     report = _run(_contract(tmp_path), tmp_path / "store.json", mode="no_record_id")
     assert report.returncode == 1

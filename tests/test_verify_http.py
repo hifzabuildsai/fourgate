@@ -22,7 +22,7 @@ EXTRACTED = {"issue_id": "ISSUE-001", "title": "REQUESTED-SECRET-TITLE"}
 
 
 @contextmanager
-def _http(status=200, title="REQUESTED-SECRET-TITLE", delay=0.0):
+def _http(status=200, title="REQUESTED-SECRET-TITLE", delay=0.0, document=None):
     seen = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -33,7 +33,8 @@ def _http(status=200, title="REQUESTED-SECRET-TITLE", delay=0.0):
             seen.append((self.path, self.headers.get("Authorization")))
             if delay:
                 time.sleep(delay)
-            body = json.dumps({"id": "ISSUE-001", "title": title}).encode() if status == 200 else b"{}"
+            payload = {"id": "ISSUE-001", "title": title} if document is None else document
+            body = json.dumps(payload).encode() if status == 200 else b"{}"
             try:
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
@@ -93,6 +94,40 @@ def test_field_mismatch_fails_with_structural_evidence_only(tmp_path):
     for value in ("OBSERVED-SECRET-TITLE", "REQUESTED-SECRET-TITLE", "ISSUE-001", "127.0.0.1"):
         assert value not in result.stdout
     assert len(seen) == 2
+
+
+@pytest.mark.parametrize("observed_id,observed_tenant,mismatch", [
+    ("ISSUE-001", "TENANT-A", None),
+    ("ISSUE-OTHER", "TENANT-A", "id"),
+    ("ISSUE-001", "TENANT-OTHER", "tenant_id"),
+])
+def test_explicit_record_and_tenant_predicates(tmp_path, observed_id, observed_tenant, mismatch):
+    # A matching title must not hide a contradiction in an approved identity predicate.
+    document = {"id": observed_id, "tenant_id": observed_tenant, "title": EXTRACTED["title"]}
+    extracted = {**EXTRACTED, "tenant_id": "TENANT-A"}
+    with _http(document=document) as (port, seen):
+        path = _config(tmp_path, port, attempts=1,
+                       expected_fields={"id": "issue_id", "tenant_id": "tenant_id", "title": "title"})
+        result = _verify(path, extracted)
+    assert result.returncode == 0  # Consumers must inspect status, even on a confirmed failure.
+    verdict = json.loads(result.stdout)
+    if mismatch is None:
+        assert verdict == {"status": "pass"}
+    else:
+        assert verdict["status"] == "fail" and verdict["reason_code"] == "field_mismatch"
+        assert verdict["evidence"]["mismatched_fields"] == [mismatch]
+        for value in (observed_id, observed_tenant, EXTRACTED["title"]):
+            assert value not in result.stdout
+    assert len(seen) == 1
+
+
+def test_missing_authoritative_identity_is_uncertainty(tmp_path):
+    # Insufficient evidence is not an authoritative contradiction.
+    with _http() as (port, seen):
+        path = _config(tmp_path, port, attempts=1, expected_fields={"tenant_id": "tenant_id"})
+        result = _verify(path, {**EXTRACTED, "tenant_id": "TENANT-A"})
+    assert result.returncode != 0 and result.stdout == ""
+    assert len(seen) == 1
 
 
 def test_configured_missing_status_fails_record_missing(tmp_path):
