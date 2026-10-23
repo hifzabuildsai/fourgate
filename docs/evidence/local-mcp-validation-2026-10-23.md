@@ -37,10 +37,21 @@ first on PATH for installed-console tests.
 | `git diff --check` | Exit 0 |
 
 The isolated wheel smoke used SHA-256
-`895f46e134db96e778e3cd7b2bd9a70827e19abca3d2f2ba9373235cb6c4e241`.
+`62f4b24dbc47528498397b44cfbd3e8441e5aa55e0cc107de123d0b8206e78d5`.
 It retains package version 0.3.0; it was not uploaded to PyPI. Build output also
 reported the existing setuptools license-table deprecation warning; no unrelated
 packaging migration was included.
+
+The initial [PR #50 CI run](https://github.com/hifzabuildsai/fourgate/actions/runs/39902858583)
+at `0dc5a88fd5300e063257bbd2759b19d82cc2ed39` exposed a Python 3.13.16
+startup inconsistency: the symlink-loop control returned exit 0 instead of 2
+(476 passed, 1 failed, 9 skipped). Python 3.13 changed non-strict
+[`Path.resolve`](https://docs.python.org/3.13/library/pathlib.html#pathlib.Path.resolve)
+to leave loops unresolved. Startup now explicitly rejects an unresolved symlink.
+The 477-pass local full-suite result predates this narrow correction; the
+57-test focused suite, build and installed-wheel smoke were repeated successfully
+after it. The fingerprint above identifies the rebuilt wheel. Hosted acceptance
+must use the corrected head, not the initial run or the earlier local result.
 
 The MCP tests exercise actual subprocess wire traffic, legacy SDK discovery and
 invocation, modern metadata/result shapes, invalid registries/arguments,

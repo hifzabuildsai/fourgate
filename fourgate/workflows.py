@@ -54,6 +54,9 @@ class WorkflowRegistry:
             target = (self._root / contract).resolve()
             if not target.is_relative_to(self._root):
                 raise ValueError("contract must resolve inside the registry directory")
+            # Python 3.13+ leaves loops unresolved in non-strict resolve().
+            if target.is_symlink():
+                raise ValueError("contract symlink could not be resolved")
             try:
                 info = target.stat()
                 identity = (info.st_dev, info.st_ino) if stat.S_ISREG(info.st_mode) and info.st_ino else None
