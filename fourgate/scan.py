@@ -3,9 +3,11 @@
 The scanner calls only names in the validated contract. Discovery checks
 availability; the server's advertised list is never used to select calls.
 """
+import hashlib
 import json
 import os
 import queue
+import stat
 import subprocess
 import sys
 import threading
@@ -23,14 +25,34 @@ VERSION_META = "io.modelcontextprotocol/protocolVersion"
 CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities"
 
 
+class RegisteredContractChangedError(ValueError):
+    """A registered file no longer matches the pinned object or bytes."""
+
+
 def _positive_ms(value, ceiling):
     return type(value) is int and 0 < value <= ceiling
 
 
-def load_contract(path, confirmation):
+def load_contract(path, confirmation, *, expected_sha256=None, expected_file_identity=None):
     """Validate the entire contract before launching a server or any write."""
     file_path = Path(path).resolve()
-    data = json.loads(file_path.read_text(encoding="utf-8"))
+    if expected_sha256 is None:
+        text = file_path.read_text(encoding="utf-8")
+    else:
+        # Hash and validate the same bytes, bounded for registered MCP checks.
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0)
+        with os.fdopen(os.open(file_path, flags), "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if (not stat.S_ISREG(info.st_mode) or expected_file_identity is not None
+                    and (info.st_dev, info.st_ino) != expected_file_identity):
+                raise RegisteredContractChangedError("registered contract file changed")
+            raw = handle.read(1024 * 1024 + 1)
+        if len(raw) > 1024 * 1024:
+            raise ValueError("registered contract exceeds 1 MiB")
+        if hashlib.sha256(raw).hexdigest() != expected_sha256:
+            raise RegisteredContractChangedError("registered contract fingerprint changed")
+        text = raw.decode("utf-8")
+    data = json.loads(text)
     if not isinstance(data, dict) or data.get("scan_version") != 1:
         raise ValueError("scan_version must be 1")
     server = data.get("server")
