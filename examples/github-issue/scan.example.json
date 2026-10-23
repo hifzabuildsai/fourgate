@@ -1,0 +1,43 @@
+{
+  "scan_version": 1,
+  "server": {
+    "transport": "stdio",
+    "command": ["REPLACE_WITH_REVIEWED_LOCAL_STDIO_COMMAND"],
+    "test_account": "disposable-github-issue",
+    "protocol_version": "2026-07-28",
+    "call_timeout_ms": 5000
+  },
+  "write_tools": ["update_issue"],
+  "cases": [{
+    "tool": "update_issue",
+    "arguments": {
+      "owner": "REPLACE_WITH_TEST_OWNER",
+      "repo": "REPLACE_WITH_TEST_REPO",
+      "issue_number": 73,
+      "title": "REPLACE WITH HUMAN-APPROVED TITLE",
+      "body": "REPLACE WITH HUMAN-APPROVED BODY",
+      "state": "open"
+    },
+    "outcome_contract": {
+      "record_id_field": "returned_number",
+      "extract": {
+        "returned_number": {"source": "result", "path": "result.structuredContent.number"},
+        "expected_number": {"source": "arguments", "path": "issue_number"},
+        "title": {"source": "arguments", "path": "title"},
+        "body": {"source": "arguments", "path": "body"},
+        "state": {"source": "arguments", "path": "state"}
+      }
+    },
+    "readback": {
+      "type": "github_issue",
+      "repository": "REPLACE_WITH_TEST_OWNER/REPLACE_WITH_TEST_REPO",
+      "issue_number_field": "returned_number",
+      "token_env": "FOURGATE_GITHUB_READ_TOKEN",
+      "expected_fields": {"number": "expected_number", "title": "title", "body": "body", "state": "state"},
+      "attempts": 1,
+      "interval_ms": 0,
+      "timeout_ms": 1500,
+      "missing_is_fail": false
+    }
+  }]
+}

@@ -161,6 +161,12 @@ repository on 2026-10-11–12; see the
 
 ## Run in CI
 
+The [GitHub Issue reference pack](examples/github-issue/README.md) provides one
+reviewed-request update contract and a local-only PASS/FAIL/UNKNOWN
+demonstration. It checks approved record number/title/body/state, documents
+404/freshness/causality limits, and reuses the existing scanner and HTTP verifier.
+The template is unconfigured; this is not new external workflow acceptance.
+
 [`examples/ci/fourgate-scan.yml`](examples/ci/fourgate-scan.yml) is a
 copy-paste GitHub Actions workflow for your own repository. It installs
 Fourgate from a release tag, runs `fourgate scan` on manual dispatch, uploads

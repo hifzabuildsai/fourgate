@@ -36,6 +36,13 @@ remain separate gates; no release/maturity upgrade is implied.
 The [dated C2 evidence record](docs/evidence/local-mcp-execution-2026-10-23.md)
 separates implementation checks from founder-reported client and pending customer evidence.
 
+Phase D1 adds the [GitHub Issue reference pack](examples/github-issue/README.md):
+one preselected Issue update with request-derived identity/title/body/state
+predicates, local matching state and read-only induced controls. It reuses the
+scanner, deterministic HTTP read-back and report format. No C2 grant is rerun.
+See [the D1 evidence record](docs/evidence/github-issue-reference-2026-10-23.md);
+external adaptation and customer/production acceptance remain pending.
+
 ## Purpose and supported path
 
 Fourgate tests whether an explicitly contracted MCP write that appears to
