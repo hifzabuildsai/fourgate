@@ -124,8 +124,13 @@ this same template and tracked stdio fixture for a loopback authority, pins the
 exact contract bytes in a registry, and prepares one fresh single-use C2 grant:
 
 ```text
+python -c "from pathlib import Path; Path('fourgate-output').mkdir(exist_ok=True)"
 python -B -m pytest -q -s tests/test_github_issue_mcp.py --basetemp fourgate-output/github-issue-d2-001
 ```
+
+The first command creates the output parent on a fresh checkout and preserves
+an existing directory's contents. Pytest requires that parent to exist when
+using the nested `--basetemp` path above.
 
 Choose a **new** basetemp path: pytest may clear an existing one. Never point it
 at prior evidence, a consumed grant or an existing execution database. The test

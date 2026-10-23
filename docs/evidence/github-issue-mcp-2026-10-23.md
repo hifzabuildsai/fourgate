@@ -155,3 +155,46 @@ remain unverified. A cached PASS does not revisit current state. Existing D1/C2
 limitations on same-host tampering, exactly-once claims, customer CI and production
 reliability remain. Hosted CI, the wider protocol/OS matrix and packaging are
 not inferred from these local results. No merge, release or deployment.
+
+## Independent Linux review and reproduction preparation
+
+The implementation-review session inspected the exact three-file diff at
+`47037ce6acd4d59eaefaaa035e7b7263ed9d6de0`, its unchanged D1/C2 helpers and
+[hosted CI at that source head](https://github.com/hifzabuildsai/fourgate/actions/runs/39976967822).
+All seven jobs succeeded. Linux Python 3.10/3.12/3.13 each reported 519 passed,
+9 skipped; Windows Python 3.12 reported 527 passed, 1 skipped. Both packaging
+jobs passed the existing installed-wheel local execution/restart smoke. These
+are independently inspected hosted results, separate from the Windows local
+commands above and from any later documentation-only head.
+
+Independent local review used existing Python 3.12.14 and pytest 9.1.1. The
+first combined invocation of the integration test and four static neighbors
+returned exit 1: **4 passed, 1 setup error**. In the fresh checkout,
+`fourgate-output` did not exist; pytest could not create a nested `--basetemp`
+directory. The integration fixture did not start: zero grants, target starts,
+updates, GETs or adapter calls from that attempt. This is a reproduction
+precondition/documentation gap, not an action FAIL or UNKNOWN.
+
+After creating only the output parent, the review session ran a new, unused
+basetemp path:
+
+```text
+mkdir -p fourgate-output
+/workspace/scratch/9f6debe465ba/fourgate-validation-venv-20261022/bin/python -B -m pytest -q -s tests/test_github_issue_mcp.py tests/test_github_issue_reference.py::test_reference_expectations_come_from_the_reviewed_request tests/test_example_contracts.py --basetemp fourgate-output/pr53-independent-review-47037ce6-ready --tb=short
+```
+
+Exit **0; 5 passed in 0.93 s**: one integration fixture and four static checks.
+The fresh fixture recorded **1 target start, 1 simulated update, 1 loopback GET
+and 6 adapter calls**. Its preparation and three serving processes exited 0.
+The reviewer cross-checked target/GET traces against the phase manifest:
+validation remained zero-execution and replay added no target start/call/GET.
+This is one additional independent local simulation, not another distinct test
+or a replay of either Windows grant above. The first setup error is retained
+separately; no runtime or test repair was needed.
+
+The pack guide now explicitly creates the output parent using portable Python
+before the documented pytest command, retaining the fresh-basetemp warning.
+This follow-up changes documentation only. Source/test acceptance above remains
+bound to `47037ce6`; a later PR head needs its own CI check. Local syntax,
+whitespace and all 11 relative documentation links passed inspection.
+No installed Codex, live GitHub workflow or customer acceptance was added.
