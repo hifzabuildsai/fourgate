@@ -6,11 +6,15 @@ The selected beta direction is **agent-operated outcome regression checks for
 consequential writes**. An agent prepares a reviewed contract; authoritative
 state determines the verdict; CI can rerun the approved checks.
 
-**Status, 23 October 2026:** prepared for Desktop acceptance. No Codex executable
-or Windows Desktop session is available in the implementation environment.
-Client discovery, activation, configuration/reload and an agent-driven protected
-write are **NOT RUN** here. Local subprocess tests are separate evidence.
-The source changes are not in the existing PyPI 0.3.0 release.
+**Status, 23 October 2026:** the founder reports Windows acceptance at source
+commit `b2bfaaa3ee2ed1490ca62eedc482774f5f1fed96`: repository skill discovery,
+explicit activation, no-write doctor checks and three local scan controls.
+Automatic activation was **not observed**; the regression exercise used manual
+skill selection. See the [dated operator report](evidence/windows-codex-2026-10-23.md)
+for provenance and exact limits. Windows artifacts were not independently read
+in the implementation environment. Client configuration/reload, runtime shadow
+routing and external workflows remain unvalidated. The source changes are not
+in the existing PyPI 0.3.0 release.
 
 ## Discover the skill without a live write
 

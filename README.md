@@ -28,8 +28,10 @@ Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is sto
 
 Using Codex or Claude Code for setup: the experimental
 [`fourgate-setup` project entries](docs/codex-setup.md) ([Claude guide](docs/claude-code-setup.md)) share one local stdio
-workflow using the existing CLI. Installed-client and external live onboarding
-acceptance remain pending; installing Fourgate alone does not install the skill.
+workflow using the existing CLI. [Founder-reported Windows checks](docs/evidence/windows-codex-2026-10-23.md)
+cover discovery, explicit activation and local scan controls; automatic activation
+was not observed. Client shadow routing and external onboarding remain pending.
+Installing Fourgate alone does not install the skill.
 
 ## System architecture
 

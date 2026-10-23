@@ -9,8 +9,11 @@ See [the 22 October coverage audit](docs/evidence/engineering-2026-10-22.md) and
 [experimental coding-agent setup](docs/claude-code-setup.md) for the next slice.
 The [23 October Phase A record](docs/evidence/engineering-2026-10-23.md) covers
 explicit modern scanner/doctor protocol support and shared
-[Codex onboarding preparation](docs/codex-setup.md). Installed Desktop acceptance
-is still pending; these source changes are not a new PyPI release.
+[Codex onboarding preparation](docs/codex-setup.md). A later
+[founder-reported Windows record](docs/evidence/windows-codex-2026-10-23.md)
+adds discovery, explicit activation, no-write readiness and local scan controls.
+Automatic activation was not observed; actual shadow routing and external
+onboarding remain pending. These source changes are not a new PyPI release.
 
 ## Purpose and supported path
 
