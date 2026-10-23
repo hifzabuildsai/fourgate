@@ -101,7 +101,8 @@ jobs:
           assert len(wheels) == 1, wheels
           assert len(list(pathlib.Path("dist").glob("fourgate-*.tar.gz"))) == 1
           names = set(zipfile.ZipFile(wheels[0]).namelist())
-          for required in ("fourgate/demo/server.py", "fourgate/demo/verifier.py"):
+          for required in ("fourgate/demo/server.py", "fourgate/demo/verifier.py", "fourgate/execution.py",
+                           "fourgate/mcp_server.py", "fourgate/workflows.py"):
               assert required in names, f"{required} missing from {wheels[0].name}"
           print(f"{wheels[0].name}: {len(names)} files, demo server and verifier present")
           EOF
@@ -141,6 +142,8 @@ jobs:
               "--", "python", "-m", "fourgate.demo.server")
           run(fourgate, "doctor", "--contracts", str(tmp / "c" / "runtime.json"), "--log", str(tmp / "o.jsonl"),
               "--", "python", "-m", "fourgate.demo.server")
+          subprocess.run([sys.executable, str(pathlib.Path("fixtures/smoke_mcp_execution.py").resolve()),
+                          "--python", python], check=True)
           EOF
 
       - name: Upload dist

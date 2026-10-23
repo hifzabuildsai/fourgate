@@ -6,8 +6,9 @@ it does not start the target server, run a verifier, contact a system of record
 or execute a write. It does not verify an action outcome.
 
 This source change is not in the existing PyPI 0.3.0 release. There are no new
-runtime dependencies or model API requirements. The existing CLI remains the
-execution path for approved regression checks.
+runtime dependencies or model API requirements. The existing CLI remains an
+execution path for approved regression checks; [C2 opt-in execution](local-mcp-execution.md)
+adds separately authorized run/report tools.
 
 ## Register a reviewed configuration
 
@@ -59,14 +60,15 @@ requests require per-request version and client capabilities. This is not a
 universal MCP conformance claim. No remote transport or runtime interception
 route is introduced.
 
-Only one tool is exposed:
+Without an execution policy, only one tool is exposed:
 
 ```json
 {"name":"validate_workflow","arguments":{"workflow_id":"staging-check"}}
 ```
 
 Arguments cannot override the registry, contract, command, URL, expectations or
-approval. `run_workflow` and `get_run_report` are **not implemented** in C1.
+approval. C1 supplies only validation; the [C2 execution mode](local-mcp-execution.md)
+requires separate operator grants and prepared state.
 
 A valid result has this meaning:
 
@@ -107,9 +109,9 @@ exercises do not establish it either. A model can omit an optional tool call.
 This interface is not a mandatory completion gate and does not fix automatic
 skill selection.
 
-Next execution/report tools require separately tested operator write grants,
-mutation budgets, replay/restart behavior and bounded structural reports. C1
-does not claim the full Phase C adapter or the commercial beta is complete.
+The separate C2 tools add single-use grants, call budgets, replay/restart controls
+and bounded structural reports. They have their own acceptance requirements.
+C1 does not claim the full Phase C adapter or commercial beta is complete.
 
 ## Filesystem and evidence boundary
 
