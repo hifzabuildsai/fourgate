@@ -107,7 +107,23 @@ def load_contract(path, confirmation, *, expected_sha256=None, expected_file_ide
         check["_contract_dir"] = str(file_path.parent)
     server["command"] = [sys.executable if s == "{python}" else s for s in command]
     server["_contract_dir"] = str(file_path.parent)
+    verifier_credentials(data)
     return data
+
+
+def verifier_credentials(data):
+    """Declared verifier-only credentials, shared by readiness and execution."""
+    names = set()
+    for case in data["cases"]:
+        names.update(readback.credential_envs(case.get("readback")))
+        if "readback" not in case:
+            declared = case["outcome_contract"]["verifier"].get("secret_env", [])
+            if not isinstance(declared, list) or any(
+                not isinstance(n, str) or not outcome.ENV_NAME.fullmatch(n) for n in declared
+            ):
+                raise ValueError("verifier.secret_env must contain environment variable names")
+            names.update(declared)
+    return names
 
 
 class StdioClient:
@@ -212,15 +228,20 @@ class StdioClient:
 
 def scan(path, confirmation):
     data = load_contract(path, confirmation)
+    return _scan_loaded_contract(data)
+
+
+def _scan_loaded_contract(data, *, before_call=None):
+    """Execute already validated bytes; internal seam for registered workflows."""
     server = data["server"]
     rows = []
     server_env = os.environ.copy()
     # Independent verifier credentials must not be inherited by the MCP
     # server executing the write. Use distinct names for write/read tokens.
-    for case in data["cases"]:
-        read_config = case.get("readback")
-        if read_config and read_config.get("token_env"):
-            server_env.pop(read_config["token_env"], None)
+    blocked = verifier_credentials(data)
+    for name in list(server_env):
+        if name in blocked or os.name == "nt" and name.upper() in {n.upper() for n in blocked}:
+            server_env.pop(name, None)
     client = StdioClient(server["command"], server["_contract_dir"], server_env)
     try:
         discovered = client.initialize(server.get("protocol_version", "2024-11-05"))
@@ -236,6 +257,8 @@ def scan(path, confirmation):
                 rows.append({"tool": name, "status": "UNKNOWN", "reason_code": "credential_missing", "attempts": 0})
                 continue
             try:
+                if before_call is not None:
+                    before_call()
                 request, response = client.request("tools/call", {"name": name, "arguments": case["arguments"]},
                                              server.get("call_timeout_ms", 5000))
             except (TimeoutError, OSError, RuntimeError) as exc:

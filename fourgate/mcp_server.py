@@ -1,8 +1,4 @@
-"""Experimental local stdio MCP configuration validation. Never executes writes.
-
-Only validate_workflow is exposed. All target commands, verifiers and endpoints
-remain inert. This is an explicit legacy/current tools subset, not a gateway.
-"""
+"""Local stdio workflow tools. Read-only unless an operator opts into execution."""
 import argparse
 import json
 import re
@@ -14,7 +10,7 @@ from .workflows import WorkflowRegistry
 LEGACY = ("2024-11-05", "2025-11-25")
 VERSIONS = (*LEGACY, scan.MODERN_PROTOCOL)
 MAX_MESSAGE_BYTES = 1024 * 1024
-USAGE = "fourgate mcp --registry PATH"
+USAGE = "fourgate mcp --registry PATH [--execution-policy PATH] [--prepare-execution-state]"
 OUTPUT_SCHEMA = {"type": "object", "properties": {
     "workflow_id": {"type": "string"},
     "readiness": {"type": "string", "enum": ["CONFIG_VALID", "NOT_READY"]},
@@ -24,6 +20,26 @@ OUTPUT_SCHEMA = {"type": "object", "properties": {
     "planned_cases": {"type": "integer", "minimum": 1},
     "missing_credential_count": {"type": "integer", "minimum": 1}},
     "required": ["readiness", "action_status", "scope", "reason_code"], "additionalProperties": False}
+RUN_SCHEMA = {"type": "object", "properties": {
+    "report_version": {"type": "integer", "enum": [1]},
+    "run_id": {"type": "string"}, "workflow_id": {"type": "string"},
+    "new_execution": {"type": "boolean", "description":
+        "Whether this request invoked the scanner; false for saved reports/replays. Not proof of persistence."},
+    "contract_sha256": {"type": "string"}, "fourgate_version": {"type": "string"},
+    "run_state": {"type": "string", "enum": ["NOT_STARTED", "COMPLETED", "UNCERTAIN"]},
+    "action_status": {"type": "string", "enum": ["NOT_RUN", "ATTEMPTED", "UNCERTAIN"],
+        "description": "Recorded run's write-call status. See new_execution for the current request."},
+    "verdict": {"type": "string", "enum": ["PASS", "FAIL", "UNKNOWN"]},
+    "reason_code": {"type": "string"},
+    "reserved_tool_calls": {"type": "integer", "minimum": 0, "maximum": 20},
+    "call_attempts": {"type": "integer", "minimum": 0, "maximum": 20},
+    "cases": {"type": "array", "maxItems": 20, "items": {"type": "object", "properties": {
+        "case_index": {"type": "integer", "minimum": 1, "maximum": 20},
+        "status": {"type": "string", "enum": ["PASS", "FAIL", "UNKNOWN"]},
+        "reason_code": {"type": "string"}},
+        "required": ["case_index", "status", "reason_code"], "additionalProperties": False}}},
+    "required": ["report_version", "run_state", "action_status", "reason_code", "new_execution"],
+    "additionalProperties": False}
 
 
 def error(mid, code, message, data=None):
@@ -35,14 +51,48 @@ def error(mid, code, message, data=None):
 
 def tool_result(payload):
     return {"content": [{"type": "text", "text": json.dumps(payload, sort_keys=True)}],
-            "structuredContent": payload, "isError": payload.get("readiness") != "CONFIG_VALID"}
+            "structuredContent": payload, "isError": (payload.get("readiness") != "CONFIG_VALID"
+                if "readiness" in payload else payload.get("verdict") != "PASS")}
 
 
 class Server:
-    def __init__(self, registry):
+    def __init__(self, registry, runner=None):
         self.registry = registry
+        self.runner = runner
         self._legacy_pending = False
         self._legacy_ready = False
+
+    def tools(self):
+        tools = [{
+            "name": "validate_workflow",
+            "description": "Check a registered scan configuration and declared credential presence. "
+                           "No server start, verifier, network or write. CONFIG_VALID is readiness; action is NOT_RUN.",
+            "inputSchema": {"type": "object", "properties": {"workflow_id": {
+                "type": "string", "enum": self.registry.ids}}, "required": ["workflow_id"],
+                "additionalProperties": False}, "outputSchema": OUTPUT_SCHEMA,
+            "annotations": {"readOnlyHint": True, "destructiveHint": False,
+                            "idempotentHint": True, "openWorldHint": False}}]
+        if self.runner is not None:
+            tools.extend([{
+                "name": "run_workflow",
+                "description": "Execute a registered disposable workflow under a single-use operator grant. "
+                    "May perform consequential writes and network access via trusted configured commands. "
+                    "Repeated run IDs return prior state; UNKNOWN is not PASS. No rollback or write retry.",
+                "inputSchema": {"type": "object", "properties": {
+                    "workflow_id": {"type": "string", "enum": self.registry.ids},
+                    "run_id": {"type": "string", "enum": self.runner.ids}},
+                    "required": ["workflow_id", "run_id"], "additionalProperties": False},
+                "outputSchema": RUN_SCHEMA, "annotations": {"readOnlyHint": False,
+                    "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}}, {
+                "name": "get_run_report",
+                "description": "Read a bounded structural report for an operator-issued run ID. "
+                    "No target execution or replay. Process success does not establish an action PASS.",
+                "inputSchema": {"type": "object", "properties": {
+                    "run_id": {"type": "string", "enum": self.runner.ids}},
+                    "required": ["run_id"], "additionalProperties": False},
+                "outputSchema": RUN_SCHEMA, "annotations": {"readOnlyHint": True,
+                    "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}}])
+        return tools
 
     def dispatch(self, message):
         if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
@@ -98,18 +148,18 @@ class Server:
         if not modern and not self._legacy_ready:
             return error(mid, -32002, "Initialize required")
         if method == "tools/list":
-            return reply({"tools": [{
-                "name": "validate_workflow",
-                "description": "Check a registered Fourgate scan configuration and declared credential presence. "
-                               "No server start, verifier, network or write. CONFIG_VALID is readiness; action is NOT_RUN.",
-                "inputSchema": {"type": "object", "properties": {"workflow_id": {
-                    "type": "string", "enum": self.registry.ids}},
-                    "required": ["workflow_id"], "additionalProperties": False},
-                "outputSchema": OUTPUT_SCHEMA,
-                "annotations": {"readOnlyHint": True, "destructiveHint": False,
-                                "idempotentHint": True, "openWorldHint": False},
-            }]}, True)
+            return reply({"tools": self.tools()}, True)
         if method == "tools/call":
+            if self.runner is not None and params.get("name") in ("run_workflow", "get_run_report"):
+                args = params.get("arguments", {})
+                required = {"workflow_id", "run_id"} if params["name"] == "run_workflow" else {"run_id"}
+                if (not isinstance(args, dict) or set(args) != required
+                        or any(not isinstance(v, str) or not 1 <= len(v) <= 64 for v in args.values())):
+                    from .execution import not_run
+                    return reply(tool_result(not_run("invalid_arguments")))
+                payload = (self.runner.run(args["workflow_id"], args["run_id"])
+                           if params["name"] == "run_workflow" else self.runner.get_report(args["run_id"]))
+                return reply(tool_result(payload))
             if params.get("name") != "validate_workflow":
                 return error(mid, -32602, "Unknown tool")
             args = params.get("arguments", {})
@@ -123,13 +173,29 @@ class Server:
 
 def main(argv):
     parser = argparse.ArgumentParser(prog="fourgate mcp", usage=USAGE,
-        description="Serve read-only registered workflow validation over local stdio MCP. No action execution.")
+        description="Serve registered workflows over local stdio MCP. Default: read-only validation. "
+                    "Execution requires a separate operator policy and prepared single-use state.")
     parser.add_argument("--registry", required=True, help="Operator-maintained local workflow registry JSON")
+    parser.add_argument("--execution-policy", help="Operator-controlled single-use run grants; enables write tools")
+    parser.add_argument("--prepare-execution-state", action="store_true",
+        help="Create new private grant state without running actions; refuses existing state")
     args = parser.parse_args(argv)
+    if args.prepare_execution_state and not args.execution_policy:
+        parser.error("--prepare-execution-state requires --execution-policy")
     try:
-        server = Server(WorkflowRegistry(args.registry))
-    except (OSError, ValueError, RecursionError, RuntimeError):
-        print("fourgate mcp: registry configuration invalid or unavailable", file=sys.stderr)
+        registry = WorkflowRegistry(args.registry)
+        runner = None
+        if args.execution_policy:
+            from .execution import ExecutionPolicy, ExecutionState, WorkflowRunner
+            policy = ExecutionPolicy(args.execution_policy, registry)
+            if args.prepare_execution_state:
+                ExecutionState.prepare(policy)
+                print("fourgate mcp: execution state prepared; actions NOT_RUN", file=sys.stderr)
+                return 0
+            runner = WorkflowRunner(registry, policy)
+        server = Server(registry, runner)
+    except Exception:
+        print("fourgate mcp: registry configuration or execution state invalid or unavailable", file=sys.stderr)
         return 2
     while True:
         raw = sys.stdin.buffer.readline(MAX_MESSAGE_BYTES + 1)

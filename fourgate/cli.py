@@ -30,7 +30,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="fourgate")
     parser.add_argument("--version", action="version", version=f"fourgate {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("mcp", help="Serve read-only registered workflow validation over local stdio MCP")
+    sub.add_parser("mcp", help="Serve registered workflow tools over local stdio MCP (default: read-only)")
     sub.add_parser("guard", help="Run a local stdio MCP server behind the runtime Outcome Guard",
                    usage=guarding.USAGE)
     sub.add_parser("doctor", help="Check a guard setup without side effects (no tools/call, no network)",

@@ -40,6 +40,12 @@ an action. [Founder-reported Codex app-server checks](docs/evidence/windows-mcp-
 cover discovery and one explicit call; Desktop UI selection/reload remains
 NOT RUN. This source feature is not in the existing PyPI release.
 
+[Experimental MCP execution](docs/local-mcp-execution.md) adds `run_workflow`
+and `get_run_report` only with a separate operator policy and prepared single-use
+state. It reuses the scanner/verifier, bounds approved calls and distinguishes
+saved reports from new execution. Installed Codex acceptance of these newer
+tools and customer workflows remain pending.
+
 ## System architecture
 
 The runtime flow below uses a local stdio MCP server and the bundled HTTP

@@ -22,7 +22,8 @@ def main():
     parser.add_argument("--store", type=Path, required=True)
     parser.add_argument("--control", choices=("healthy", "missing", "input_required", "unknown_type",
                                             "unsupported_version", "discovery_input_required", "missing_result_type",
-                                            "discovery_missing_type", "list_missing_type", "wrong_versions"), default="healthy")
+                                            "discovery_missing_type", "list_missing_type", "wrong_versions",
+                                            "persist_timeout"), default="healthy")
     args = parser.parse_args()
     legacy_version = None
     for raw in sys.stdin:
@@ -68,9 +69,11 @@ def main():
                 elif args.control == "unknown_type":
                     result = {"resultType": "future-fixture-result"}
                 else:
-                    if args.control in ("healthy", "missing_result_type"):
+                    if args.control in ("healthy", "missing_result_type", "persist_timeout"):
                         args.store.write_text(json.dumps([{"id": "ISSUE-001", "title": params[
                             "arguments"]["title"]}]), encoding="utf-8")
+                    if args.control == "persist_timeout":
+                        continue  # induced: persisted write with no response; keep reading to expose retries
                     result = {"content": [{"type": "text", "text": "Created ISSUE-001"}],
                               "structuredContent": {"issue_id": "ISSUE-001"}, "isError": False}
             else:

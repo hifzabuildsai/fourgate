@@ -5,7 +5,7 @@ import re
 import stat
 from pathlib import Path
 
-from . import readback, scan
+from . import scan
 
 MAX_REGISTRY_BYTES = 1024 * 1024
 WORKFLOW_ID = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
@@ -69,35 +69,36 @@ class WorkflowRegistry:
         return sorted(self._entries)
 
     def validate(self, workflow_id):
+        return self.validated_contract(workflow_id)[1]
+
+    def fingerprint(self, workflow_id):
+        entry = self._entries.get(workflow_id)
+        return entry[1] if entry else None
+
+    def validated_contract(self, workflow_id):
+        """Return the same pinned data used for readiness, without reopening it."""
         result = {"readiness": "NOT_READY", "action_status": "NOT_RUN", "scope": "STATIC_CONFIG_ONLY"}
         if workflow_id not in self._entries:
-            return {**result, "reason_code": "workflow_not_registered"}
+            return None, {**result, "reason_code": "workflow_not_registered"}
         result["workflow_id"] = workflow_id
         path, digest, account, identity = self._entries[workflow_id]
         try:
             if identity is None or not path.resolve().is_relative_to(self._root) or not path.is_file():
-                return {**result, "reason_code": "contract_unavailable"}
+                return None, {**result, "reason_code": "contract_unavailable"}
             # Check the opened file's identity before reading, including a swap
             # after the path check. Registry creation assumes a trusted, stable root.
             data = scan.load_contract(path, account, expected_sha256=digest, expected_file_identity=identity)
-            credentials = set()
-            for case in data["cases"]:
-                credentials.update(readback.credential_envs(case.get("readback")))
-                declared = (case["outcome_contract"]["verifier"].get("secret_env", [])
-                            if "readback" not in case else [])
-                if not isinstance(declared, list) or any(not isinstance(n, str) or not n for n in declared):
-                    raise ValueError("invalid credential declarations")
-                credentials.update(declared)
+            credentials = scan.verifier_credentials(data)
         except (OSError, RuntimeError):
-            return {**result, "reason_code": "contract_unavailable"}
+            return None, {**result, "reason_code": "contract_unavailable"}
         except scan.RegisteredContractChangedError:
-            return {**result, "reason_code": "contract_changed"}
+            return None, {**result, "reason_code": "contract_changed"}
         except (ValueError, RecursionError, TypeError, KeyError, AttributeError):
-            return {**result, "reason_code": "contract_invalid"}
+            return None, {**result, "reason_code": "contract_invalid"}
         except Exception:
-            return {**result, "reason_code": "internal_validation_error"}
+            return None, {**result, "reason_code": "internal_validation_error"}
         missing = sum(not os.environ.get(name) for name in credentials)
         if missing:
-            return {**result, "reason_code": "credential_missing", "missing_credential_count": missing}
-        return {**result, "readiness": "CONFIG_VALID", "reason_code": "static_checks_satisfied",
+            return None, {**result, "reason_code": "credential_missing", "missing_credential_count": missing}
+        return data, {**result, "readiness": "CONFIG_VALID", "reason_code": "static_checks_satisfied",
                 "planned_cases": len(data["cases"])}
