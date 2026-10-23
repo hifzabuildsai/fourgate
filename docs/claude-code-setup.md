@@ -21,7 +21,9 @@ and check that `fourgate-setup` is available. In another project, ask your codin
 agent to copy the complete
 [fourgate-setup directory](../.claude/skills/fourgate-setup/) into that project's
 `.claude/skills/`, preserving an existing directory instead of overwriting it.
-Include `references/commands.md`; copying `SKILL.md` alone omits the command guide.
+Keep the shared `docs/agent-setup-workflow.md` and `docs/agent-setup-commands.md`
+at their repository-relative paths; the thin client entry references them.
+Copying the skill directory alone into another project is no longer sufficient.
 
 This is a repository-distributed skill. Installing the PyPI package does not
 install it into Claude Code. No marketplace/plugin package or installer is provided.
@@ -90,7 +92,9 @@ customer CI, production reliability and natural incidents are separate evidence.
 ## References
 
 - [Skill instructions](../.claude/skills/fourgate-setup/SKILL.md)
-- [Command reference](../.claude/skills/fourgate-setup/references/commands.md)
+- [Shared workflow](agent-setup-workflow.md)
+- [Command reference](agent-setup-commands.md)
+- [Codex setup](codex-setup.md)
 - [Engineering coverage audit](evidence/engineering-2026-10-22.md)
 - [Claude Code skills](https://code.claude.com/docs/en/skills)
 - [Claude Code MCP configuration](https://code.claude.com/docs/en/mcp)

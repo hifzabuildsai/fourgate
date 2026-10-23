@@ -26,8 +26,8 @@ Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.m
 
 Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is stored, and where your data goes.
 
-Using Claude Code for setup: the experimental
-[`fourgate-setup` project skill](docs/claude-code-setup.md) guides one local stdio
+Using Codex or Claude Code for setup: the experimental
+[`fourgate-setup` project entries](docs/codex-setup.md) ([Claude guide](docs/claude-code-setup.md)) share one local stdio
 workflow using the existing CLI. Installed-client and external live onboarding
 acceptance remain pending; installing Fourgate alone does not install the skill.
 
@@ -213,7 +213,13 @@ No flag takes a secret: credentials are named by environment variable (`--token-
 fourgate doctor --contracts path/to/contracts.json --log outcomes.jsonl -- python your_server.py
 ```
 
-`doctor` takes the same arguments as `guard` and checks the setup before you wrap a real server: the contracts, each verifier (for the bundled `fourgate.verify_http`, its read-back config, URL rules, budget and failure reasons), that credential variables are set and withheld from the server, the outcome log location, and, when a server command follows `--`, that the server answers `initialize` and `tools/list` and advertises every protected tool. It exits 0 when the setup is ready for shadow mode, 1 when it is not, and 2 on a usage error.
+`doctor` takes the same setup arguments as `guard` and checks the setup before you wrap a real server: the contracts, each verifier (for the bundled `fourgate.verify_http`, its read-back config, URL rules, budget and failure reasons), that credential variables are set and withheld from the server, the outcome log location, and, when a server command follows `--`, that lifecycle discovery succeeds and every protected tool is advertised. It exits 0 when the setup is ready for shadow mode, 1 when it is not, and 2 on a usage error.
+
+The default discovery lifecycle is legacy `2024-11-05`. For an explicitly selected
+native server, add `--protocol-version 2026-07-28` to doctor before `--` and review
+`server.protocol_version` in the scan contract. That mode uses `server/discover`
+and per-request metadata; it does not fall back to initialize. This source change
+is not yet in the PyPI release. See [protocol limits](specs/scan-contract-v1.md).
 
 It never sends `tools/call`, never runs a verifier, never makes a network request, and never creates or modifies a file. It therefore cannot confirm that the read credential is valid or read-only, or that the read-back endpoint is reachable. When a server command is given, the server is started only for `initialize` and `tools/list`; anything the server does on its own at start-up is outside Fourgate's control.
 
@@ -347,7 +353,7 @@ yet.
 - Outcome verification adds read-back latency on the protected call. The runtime caps each verifier at 2000 ms and fails open (UNKNOWN) on uncertainty. `verify_http` measured 1.2–1.6 s per call on a Windows laptop, and a first cold call exceeded its budget, so headroom is small on slow networks.
 - Only command-configured local stdio MCP servers are covered (scanner and runtime); no remote MCP transport.
 - No dashboard, alerting product, gateway, retry engine, or automatic compensation.
-- Preflight's test handshake uses an older MCP protocol version, and its tests need the `mcp==1.9.4` dev dependency.
+- The older `checker/preflight.py` remains a separate legacy diagnostic. Scanner/doctor have explicit legacy and `2026-07-28` modes tested with local fixtures; that is not universal compatibility. Legacy SDK tests still use the dev-only `mcp==1.9.4` pin.
 
 ## Tests
 

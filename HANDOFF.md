@@ -7,6 +7,10 @@ Customer CI and production reliability remain unvalidated. The earlier release
 history and operator evidence below must be read with their dates and limits.
 See [the 22 October coverage audit](docs/evidence/engineering-2026-10-22.md) and
 [experimental coding-agent setup](docs/claude-code-setup.md) for the next slice.
+The [23 October Phase A record](docs/evidence/engineering-2026-10-23.md) covers
+explicit modern scanner/doctor protocol support and shared
+[Codex onboarding preparation](docs/codex-setup.md). Installed Desktop acceptance
+is still pending; these source changes are not a new PyPI release.
 
 ## Purpose and supported path
 
@@ -20,7 +24,7 @@ The `fourgate scan` package entry point calls `fourgate.cli.main`:
 1. `fourgate.scan.load_contract` validates a JSON contract and requires the
    exact `--confirm-test-account` label **before spawning the server**.
 2. `StdioClient` starts the configured server in the contract directory,
-   initializes MCP, and lists its tools. Only explicit names in `write_tools`
+   runs the selected lifecycle discovery, and lists its tools. Only explicit names in `write_tools`
    and `cases` are called; discovery never generates test calls. Read-back
    token env vars are removed from the child server environment; the write
    and read credentials must use distinct env names.
