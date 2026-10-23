@@ -139,11 +139,13 @@ Declared read-back token/username and custom-verifier secret variables are
 removed from the target server's environment. Trusted custom verifiers still
 inherit the operator environment.
 
-Local fixture/SDK and installed-wheel checks are distinct from installed Codex
-app-server acceptance of C2, Desktop UI reload/selection, customer CI and
-production reliability. The C1 founder report does not establish those newer
-tools. Fixed local fixture IDs do not prove fresh-write causality or a natural
-silent-success incident. Runtime shadow/enforce behavior and its two-second
-verification cap are unchanged.
+Local fixture/SDK and installed-wheel checks are distinct from the
+[founder-reported C2 Codex app-server acceptance](evidence/windows-mcp-execution-2026-10-23.md)
+at `c0e06f0e`: local PASS, induced FAIL/UNKNOWN, three protected target calls,
+and no extra target/verifier calls on saved-result replay. Raw Windows
+artifacts were not independently reviewed here. Desktop UI reload/selection,
+customer CI and production reliability remain unvalidated. Fixed local fixture
+IDs do not prove fresh-write causality or a natural silent-success incident.
+Runtime shadow/enforce behavior and its two-second verification cap are unchanged.
 
 State mechanics reference: [SQLite transactions](https://www.sqlite.org/lang_transaction.html).

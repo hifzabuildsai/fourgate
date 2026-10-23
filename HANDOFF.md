@@ -28,10 +28,13 @@ call at `dde4e1a9`; Desktop UI selection/reload remains NOT RUN.
 Phase C2 adds [opt-in execution/report tools](docs/local-mcp-execution.md) over
 the shared scanner. Separate operator grants, prepared local SQLite state,
 durable reservation and call budgets govern execution. C1 validation stays
-read-only. C2 installed Codex acceptance, reference-pack work and external
-owner/customer CI remain separate gates; no release/maturity upgrade is implied.
+read-only. A [founder-reported C2 app-server check](docs/evidence/windows-mcp-execution-2026-10-23.md)
+at `c0e06f0e` records local PASS, induced FAIL/UNKNOWN and replay without extra
+target/verifier calls. Raw Windows artifacts were not independently reviewed
+here. Desktop UI acceptance, reference-pack work and external owner/customer CI
+remain separate gates; no release/maturity upgrade is implied.
 The [dated C2 evidence record](docs/evidence/local-mcp-execution-2026-10-23.md)
-separates local simulations and induced controls from pending client/customer evidence.
+separates implementation checks from founder-reported client and pending customer evidence.
 
 ## Purpose and supported path
 

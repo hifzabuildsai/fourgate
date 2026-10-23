@@ -49,8 +49,12 @@ the repair. Preserving the executable's absolute path instead of resolving
 symlinks then produced exit 0, local PASS, one target start/call and no replay
 write. Product modules were unchanged by this harness-only correction. The
 full-suite result above predates it; installed-wheel smoke was repeated after
-it, and hosted acceptance must use the corrected head. This is not an outcome
-verification or natural silent-success finding.
+it. The [corrected-head hosted run](https://github.com/hifzabuildsai/fourgate/actions/runs/39909209441)
+at `c0e06f0e500874eb493019f6be90128e15d0725c` was independently checked:
+all seven jobs succeeded. Linux Python 3.10/3.12/3.13 each reported 513 passed,
+9 skipped; Windows Python 3.12 reported 521 passed, 1 skipped. Both packaging
+jobs passed fresh installed-wheel smoke. The initial harness defect is not an
+outcome verification or natural silent-success finding.
 
 ## Behavioral evidence
 
@@ -79,10 +83,15 @@ These are review passes by one agent, not multiple independent reviews.
 
 ## Remaining acceptance and limits
 
-- Hosted CI must be checked at this PR's actual source head, independently of
-  PR #50. The local full suite is Linux evidence only.
-- Actual installed Codex app-server discovery/execution/report acceptance for
-  **C2**: NOT RUN here. Its earlier C1 validation-only result does not establish it.
+- Hosted CI at the tested source head `c0e06f0e` passed as recorded above;
+  any later PR head needs its own CI check. The local full suite is Linux
+  evidence only; Windows test evidence comes from hosted CI.
+- Actual installed Codex app-server execution/report acceptance for **C2** was
+  subsequently [reported by the founder](windows-mcp-execution-2026-10-23.md)
+  at `c0e06f0e`: local PASS, induced FAIL/UNKNOWN and saved-result replay without
+  extra target/verifier calls. Those Windows artifacts were not independently
+  inspected or rerun here. The original harness-blocked grant remained UNKNOWN;
+  a separately approved replacement supplied PASS, without resetting state.
 - Desktop UI reload/tool selection, customer workflows, customer CI, production
   reliability, buyer value and natural silent-success findings remain unvalidated.
 - State assumes trusted local storage and preservation of grant history.
