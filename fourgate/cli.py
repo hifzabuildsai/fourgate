@@ -15,6 +15,9 @@ from .demo import runner as demoing
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ["mcp"]:
+        from . import mcp_server
+        return mcp_server.main(argv[1:])
     # guard and doctor own their argv: tokens after "--" go to the server untouched.
     if argv[:1] == ["guard"]:
         return guarding.main(argv[1:])
@@ -27,6 +30,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="fourgate")
     parser.add_argument("--version", action="version", version=f"fourgate {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("mcp", help="Serve read-only registered workflow validation over local stdio MCP")
     sub.add_parser("guard", help="Run a local stdio MCP server behind the runtime Outcome Guard",
                    usage=guarding.USAGE)
     sub.add_parser("doctor", help="Check a guard setup without side effects (no tools/call, no network)",

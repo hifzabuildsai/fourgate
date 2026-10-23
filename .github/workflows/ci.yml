@@ -52,6 +52,9 @@ jobs:
       - name: Check installed init CLI
         run: fourgate init --help
 
+      - name: Check installed read-only MCP CLI
+        run: fourgate mcp --help
+
       - name: Doctor preflight on the demo fixture
         run: fourgate doctor --contracts fixtures/contracts/outcome_demo.json -- python fixtures/outcome_server.py
 
@@ -127,6 +130,7 @@ jobs:
           print(out, end="")
           version = wheel.name.split("-")[1]
           assert out.splitlines() == [f"fourgate {version}"], out
+          run(fourgate, "mcp", "--help")
           run(fourgate, "demo", "--out", str(tmp / "d"))
           assert (tmp / "d" / "fourgate-demo-summary.html").is_file()
           run(fourgate, "init", "--tool", "create_issue", "--test-account", "disposable-demo",

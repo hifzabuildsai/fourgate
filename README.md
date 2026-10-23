@@ -33,6 +33,12 @@ cover discovery, explicit activation and local scan controls; automatic activati
 was not observed. Client shadow routing and external onboarding remain pending.
 Installing Fourgate alone does not install the skill.
 
+The experimental [local MCP validation tool](docs/local-mcp-validation.md) lets
+an agent check one registered configuration using the same scanner loader.
+It reports static readiness and NOT RUN; it cannot execute workflows or verify
+an action. Installed Codex tool acceptance is pending. This source feature is
+not in the existing PyPI release.
+
 ## System architecture
 
 The runtime flow below uses a local stdio MCP server and the bundled HTTP

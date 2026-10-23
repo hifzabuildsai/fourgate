@@ -43,3 +43,12 @@ the relevant test-account records.
 Use a separate, least-privilege read token where the provider permits it.
 Pass credentials through environment variables, never in a contract file or
 chat. Do not commit generated reports, tokens, or customer data.
+
+The experimental `fourgate mcp` interface exposes only static validation of
+operator-registered scan configurations. It does not start target servers,
+execute verifiers, make network requests or run actions. Tool arguments cannot
+supply paths, commands, URLs or execution grants. Registry directories must be
+trusted and stable at startup; pinned bytes and file identities are not a
+sandbox against a local actor who can replace the registry or Fourgate itself.
+See [the local MCP validation boundary](docs/local-mcp-validation.md) for the
+read limits, restart requirements and remaining client acceptance checks.
