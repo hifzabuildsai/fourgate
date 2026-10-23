@@ -11,7 +11,8 @@ import tempfile
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--python", required=True, help="Interpreter with the candidate Fourgate wheel installed")
-    python = str(Path(parser.parse_args().python).resolve())
+    # Preserve a venv's executable path: resolving its symlink selects base Python.
+    python = str(Path(parser.parse_args().python).absolute())
     with tempfile.TemporaryDirectory(prefix="fg-c2-") as temporary:
         root = Path(temporary)
         trace, store = root / "target.txt", root / "authority.json"

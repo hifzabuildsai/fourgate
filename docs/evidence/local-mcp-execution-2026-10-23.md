@@ -40,6 +40,18 @@ setuptools license-table deprecation warning remains outside this change.
 Local build/smoke output is under ignored `fourgate-output/phasec2-*` paths;
 the reproducible smoke script is tracked and also runs in packaging CI.
 
+The [initial hosted run](https://github.com/hifzabuildsai/fourgate/actions/runs/39908795627)
+at `7aa8411792e1acbc9dea04b3699757acfbebdd55` found a Linux packaging-smoke
+harness defect: resolving a venv Python symlink selected the base interpreter,
+which could not import the installed wheel. Windows packaging and the Linux
+test jobs passed. An explicitly symlinked local venv reproduced exit 1 before
+the repair. Preserving the executable's absolute path instead of resolving
+symlinks then produced exit 0, local PASS, one target start/call and no replay
+write. Product modules were unchanged by this harness-only correction. The
+full-suite result above predates it; installed-wheel smoke was repeated after
+it, and hosted acceptance must use the corrected head. This is not an outcome
+verification or natural silent-success finding.
+
 ## Behavioral evidence
 
 | Fixture / induced control | Observed behavior |
