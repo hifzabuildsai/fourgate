@@ -70,14 +70,25 @@ Local command details, wheel-smoke JSON and build output are retained under
 the checkout's ignored `fourgate-output/` directory. They are not hosted
 customer evidence or durable CI artifacts.
 
+## Hosted checks and reported client acceptance
+
+The [corrected-head hosted run](https://github.com/hifzabuildsai/fourgate/actions/runs/39903314477)
+at `dde4e1a987235e3d702aa5725cf028efcfa6fd3b` completed successfully: all
+seven jobs passed. Linux Python 3.10/3.12/3.13 each reported 477 passed,
+9 skipped; Windows Python 3.12 reported 485 passed, 1 skipped. Both packaging
+jobs and the CI template check also passed. Run status/head and job logs were
+independently retrieved; this is hosted project CI, not customer CI.
+
+The later [operator-reported app-server observation](windows-mcp-validation-2026-10-23.md)
+at that same source revision adds discovery and one explicit call with
+CONFIG_VALID / STATIC_CONFIG_ONLY / NOT_RUN. The raw Windows artifacts were
+not accessed here. Later documentation-only changes must be checked separately
+from the run above; the executable client exercise is still bound to `dde4e1a9`.
+
 ## Remaining acceptance
 
-- Hosted CI for this branch must be checked at its actual head, separately from
-  the previous PR's checks. Linux evidence above does not establish Windows or
-  Python 3.10/3.13 results.
-- Codex Desktop discovery and invocation of this new tool: **NOT RUN**. No
-  client configuration was changed here. Existing skill activation/CLI results
-  do not establish this interface's client compatibility.
+- Codex Desktop UI tool selection/reload: **NOT RUN**. The reported direct
+  app-server discovery/call does not establish that separate client layer.
 - Automatic skill selection remains unobserved; an optional MCP call is not a
   mandatory application completion gate.
 - Target startup, verifier execution, remote writes and customer workflows via

@@ -20,7 +20,10 @@ through `validate_workflow`. Workflow execution and report retrieval tools are
 not implemented in this increment; client acceptance and the remaining write
 grant/budget controls must stay explicit.
 The [dated C1 evidence note](docs/evidence/local-mcp-validation-2026-10-23.md)
-records local checks and separates them from pending client/hosted acceptance.
+records local and hosted checks. A later
+[founder-reported app-server check](docs/evidence/windows-mcp-validation-2026-10-23.md)
+adds discovery and one explicit CONFIG_VALID / STATIC_CONFIG_ONLY / NOT_RUN
+call at `dde4e1a9`; Desktop UI selection/reload remains NOT RUN.
 
 ## Purpose and supported path
 

@@ -99,10 +99,13 @@ entry needs to be wrapped or replaced for this validation tool. Apply client
 configuration only within its authorized scope.
 
 Tests include a real installed MCP Python SDK 1.9.4 client and raw modern
-request/response checks. Codex Desktop discovery/invocation of this new tool
-still needs actual client acceptance; the earlier skill/CLI exercises do not
-establish it. A model can omit an optional tool call. This interface is not a
-mandatory completion gate and does not fix automatic skill selection.
+request/response checks. A [founder-reported installed Codex app-server check](evidence/windows-mcp-validation-2026-10-23.md)
+at `dde4e1a9` adds discovery and one explicit legacy 2024-11-05 invocation using
+temporary process overrides. Its raw Windows report was not reviewed here.
+Desktop UI tool selection/reload is still NOT RUN; the earlier skill/CLI
+exercises do not establish it either. A model can omit an optional tool call.
+This interface is not a mandatory completion gate and does not fix automatic
+skill selection.
 
 Next execution/report tools require separately tested operator write grants,
 mutation budgets, replay/restart behavior and bounded structural reports. C1
