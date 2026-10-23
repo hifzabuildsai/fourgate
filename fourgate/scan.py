@@ -17,6 +17,10 @@ from . import __version__, readback
 
 MAX_CALL_TIMEOUT_MS = 10000
 MAX_STDOUT_LINE = 2 * 1024 * 1024
+MODERN_PROTOCOL = "2026-07-28"
+PROTOCOLS = ("2024-11-05", "2025-11-25", MODERN_PROTOCOL)
+VERSION_META = "io.modelcontextprotocol/protocolVersion"
+CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities"
 
 
 def _positive_ms(value, ceiling):
@@ -39,7 +43,7 @@ def load_contract(path, confirmation):
     if not isinstance(command, list) or not command or not all(isinstance(s, str) and s for s in command):
         raise ValueError("server.command must be a nonempty string array")
     protocol = server.get("protocol_version", "2024-11-05")
-    if protocol not in ("2024-11-05", "2025-11-25"):
+    if protocol not in PROTOCOLS:
         raise ValueError("unsupported stdio protocol_version")
     timeout = server.get("call_timeout_ms", 5000)
     if not _positive_ms(timeout, MAX_CALL_TIMEOUT_MS):
@@ -90,6 +94,7 @@ class StdioClient:
                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0, env=env, cwd=cwd)
         self._queue = queue.Queue()
         self._id = 0
+        self.protocol = None
         threading.Thread(target=self._read_lines, daemon=True).start()
 
     def _read_lines(self):
@@ -101,6 +106,12 @@ class StdioClient:
 
     def request(self, method, params, timeout_ms):
         self._id += 1
+        if self.protocol == MODERN_PROTOCOL:
+            # No sampling/elicitation capabilities: incomplete results are not
+            # completed by the scanner, and tools/call is never automatically retried.
+            params = {**params, "_meta": {**params.get("_meta", {}),
+                      VERSION_META: self.protocol, CAPABILITIES_META: {},
+                      "io.modelcontextprotocol/clientInfo": {"name": "fourgate-scan", "version": __version__}}}
         request = {"jsonrpc": "2.0", "id": self._id, "method": method, "params": params}
         self._send(request)
         deadline = time.monotonic() + timeout_ms / 1000
@@ -128,29 +139,53 @@ class StdioClient:
         self.proc.stdin.flush()
 
     def initialize(self, protocol):
-        _, response = self.request("initialize", {
-            "protocolVersion": protocol, "capabilities": {},
-            "clientInfo": {"name": "fourgate-scan", "version": __version__},
-        }, 5000)
-        if "error" in response or not isinstance(response.get("result"), dict):
-            raise RuntimeError("initialize failed")
-        self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        if protocol not in PROTOCOLS:
+            raise ValueError("unsupported stdio protocol_version")
+        self.protocol = protocol
+        if protocol == MODERN_PROTOCOL:
+            # Explicit modern mode: probe before any tools/call. A failed or
+            # unsupported modern response must not trigger a legacy downgrade.
+            _, response = self.request("server/discover", {}, 5000)
+            result = self._complete_result(response, "server/discover")
+            versions = result.get("supportedVersions")
+            if not isinstance(versions, list) or protocol not in versions:
+                raise RuntimeError("server/discover does not support the selected protocol")
+            if not isinstance(result.get("capabilities"), dict):
+                raise RuntimeError("server/discover capabilities missing")
+        else:
+            _, response = self.request("initialize", {
+                "protocolVersion": protocol, "capabilities": {},
+                "clientInfo": {"name": "fourgate-scan", "version": __version__},
+            }, 5000)
+            self._complete_result(response, "initialize")
+            self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
         _, response = self.request("tools/list", {}, 5000)
-        tools = response.get("result", {}).get("tools") if isinstance(response.get("result"), dict) else None
+        tools = self._complete_result(response, "tools/list").get("tools")
         if not isinstance(tools, list):
             raise RuntimeError("tools/list failed")
         return {tool.get("name") for tool in tools if isinstance(tool, dict)}
 
+    def _complete_result(self, response, method):
+        result = response.get("result")
+        if ("error" in response or not isinstance(result, dict)
+                or result.get("resultType", None if self.protocol == MODERN_PROTOCOL else "complete") != "complete"):
+            raise RuntimeError(f"{method} did not return a complete result")
+        return result
+
     def close(self):
-        if self.proc.poll() is None:
-            self.proc.terminate()
-            try:
-                self.proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-                self.proc.wait(timeout=2)
-        self.proc.stdout.close()
+        # stdio shutdown starts with EOF, giving the child a bounded chance to exit.
         self.proc.stdin.close()
+        if self.proc.poll() is None:
+            try:
+                self.proc.wait(timeout=0.2)
+            except subprocess.TimeoutExpired:
+                self.proc.terminate()
+                try:
+                    self.proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
+                    self.proc.wait(timeout=2)
+        self.proc.stdout.close()
 
 
 def scan(path, confirmation):
@@ -188,10 +223,17 @@ def scan(path, confirmation):
             try:
                 check = case["outcome_contract"]
                 result = response.get("result")
+                result_type = result.get("resultType", outcome.MISSING if client.protocol == MODERN_PROTOCOL
+                                         else "complete") if isinstance(result, dict) else "complete"
+                incomplete = result_type != "complete"
                 record_id_field = check.get("record_id_field")
                 record_id = (outcome._select(check["extract"][record_id_field], case["arguments"], response)
                              if record_id_field is not None else None)
-                if (record_id_field is not None and isinstance(result, dict) and not result.get("isError")
+                if incomplete:
+                    evaluation = {"status": "unknown", "attempts": 0, "reason_code": (
+                        "missing_result_type" if result_type is outcome.MISSING else
+                        "incomplete_tool_result" if result_type == "input_required" else "unsupported_result_type")}
+                elif (record_id_field is not None and isinstance(result, dict) and not result.get("isError")
                         and (record_id is outcome.MISSING or record_id is None or record_id == "")):
                     evaluation = {"status": "unknown", "reason_code": "success_without_record_id", "attempts": 0,
                                   "readback_evidence": {"reason_code": "readback_not_run_without_record_id"}}
@@ -212,6 +254,10 @@ def scan(path, confirmation):
                                    "readback": evaluation.get("readback_evidence", {
                                        "reason_code": evaluation["reason_code"]})}
             rows.append(row)
+            if incomplete:
+                # It may be pending or partially performed. Neither retry nor
+                # proceed to another write; no verifier was run for this result.
+                break
     except (TimeoutError, OSError, RuntimeError) as exc:
         rows.append({"tool": None, "status": "UNKNOWN", "reason_code": type(exc).__name__})
     finally:
