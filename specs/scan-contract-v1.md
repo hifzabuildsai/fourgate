@@ -13,7 +13,7 @@ output selectors before it can run; it is not an end-to-end validation claim.
 - `scan_version`: exactly `1`.
 - `server`: `transport: "stdio"`, a command array (no shell), a nonempty
   `test_account` label, optional `protocol_version` (`2024-11-05` or
-  `2025-11-25`) and `call_timeout_ms` (1–10000, default 5000). The command
+  `2025-11-25` or `2026-07-28`) and `call_timeout_ms` (1–10000, default 5000). The command
   runs with the contract directory as its working directory. `{python}` in a
   command selects the current Python interpreter.
 - `write_tools`: unique explicit MCP tool names that may be called.
@@ -68,15 +68,28 @@ structural evidence does not include response headers, authorization, URL, or
 body. A denied response or unconfigured missing status remains UNKNOWN;
 reporting its status does not change the verdict.
 
-The scanner validates every case before launching the MCP server. It initializes
-and lists tools, then calls only contracted names discovered on that server.
+The scanner validates every case before launching the MCP server. Legacy versions
+use initialize, notifications/initialized and tools/list. Explicit `2026-07-28`
+uses server/discover and tools/list with protocol version and empty client
+capabilities in each request's `_meta`; no legacy initialize is sent in this mode.
+The selected modern version must be advertised. There is no automatic era probing,
+version downgrade or multi-round input completion. Select the mode for the actual
+server; the default remains `2024-11-05`. Tests cover a pinned specification subset,
+not universal MCP conformance or runtime guard compatibility.
+
+Only contracted names discovered on that server are called.
 Verifier PASS maps to `PASS`, confirmed postcondition failure to `FAIL`, and
 every failed call, timeout, or verifier fault to `UNKNOWN`. If
 `record_id_field` is configured but its ID is absent or text extraction fails,
 the verdict is `UNKNOWN / success_without_record_id` with zero read-back
 attempts. It does not prove whether a write occurred.
 After a timed-out write the scan stops: retrying the write may duplicate an
-action that already happened. Scan exits 0 only when all cases pass, 1 for a
+action that already happened. An `input_required` or unknown `resultType` also
+stops the scan with UNKNOWN (`incomplete_tool_result` / `unsupported_result_type`),
+zero read-back attempts and no further writes. Modern replies must explicitly
+declare `resultType`; absence is UNKNOWN / `missing_result_type`. In legacy mode
+the absent field still means complete. None of these protocol conditions proves
+whether the action persisted. Scan exits 0 only when all cases pass, 1 for a
 FAIL/UNKNOWN, and 2 for invalid configuration.
 
 This slice supports local stdio MCP servers and either the existing bounded

@@ -3,7 +3,8 @@
 Takes the same arguments as guard. It never sends tools/call, never runs a
 verifier, never makes a network request, and never creates or modifies a
 file. With a server command after `--`, it starts the server only for
-initialize / notifications/initialized / tools/list, with verifier
+legacy initialize / notifications/initialized / tools/list or modern
+server/discover / tools/list, with verifier
 secret_env names withheld exactly as guard does, then stops it.
 The report goes to stdout as ASCII; usage errors go to stderr.
 """
@@ -19,7 +20,8 @@ from . import readback
 from . import scan
 from . import verify_http
 
-USAGE = "fourgate doctor --contracts PATH [--mode shadow|enforce] [--server LABEL] [--log PATH] [-- <server command...>]"
+USAGE = ("fourgate doctor --contracts PATH [--mode shadow|enforce] [--server LABEL] [--log PATH] "
+         "[--protocol-version VERSION] [-- <server command...>]")
 DESCRIPTION = ("Check a fourgate guard setup without side effects: no tools/call, no verifier run, "
                "no network request, no file written. Pass the server command after -- to also check "
                "the MCP handshake and tool discovery.")
@@ -50,6 +52,8 @@ class Report:
 
 def main(argv):
     parser = guarding.build_parser(prog="fourgate doctor", usage=USAGE, description=DESCRIPTION)
+    parser.add_argument("--protocol-version", choices=scan.PROTOCOLS, default=PROTOCOL,
+                        help="stdio discovery protocol (default: %(default)s); modern uses server/discover")
     own, target = guarding.split_argv(argv)
     args = parser.parse_args(own)
     if target is not None and not target:
@@ -78,14 +82,15 @@ def main(argv):
         report.add("OK", f"contracts valid; protected tools: {', '.join(sorted(tools))}")
         configs = _check_verifiers(report, contracts)
         _check_credentials(report, tools, configs)
-        started = _check_server(report, contracts, target)
+        started = _check_server(report, contracts, target, args.protocol_version)
         _check_mode_and_log(report, args)
         _check_write_safety(report, configs)
 
     report.line()
     report.line("Fourgate sent no tools/call, ran no verifier, made no network request and wrote no file.")
     if started:
-        report.line("The server was started only for initialize and tools/list, then stopped. Anything the server "
+        discovery = "server/discover" if args.protocol_version == scan.MODERN_PROTOCOL else "initialize"
+        report.line(f"The server was started only for {discovery} and tools/list, then stopped. Anything the server "
                     "does on its own at start-up is outside Fourgate's control.")
     else:
         report.line("The server was not started.")
@@ -235,8 +240,8 @@ def _check_credentials(report, tools, configs):
     report.add("INFO", "the verifier process inherits the full environment, including the server's own credentials")
 
 
-def _check_server(report, contracts, target):
-    """initialize + tools/list only. Returns True if the server process was started."""
+def _check_server(report, contracts, target, protocol=PROTOCOL):
+    """Selected lifecycle discovery + tools/list only; never tools/call."""
     report.section("MCP server")
     if not target:
         report.add("SKIP", "pass the server command after -- to check the handshake and tool discovery")
@@ -247,7 +252,7 @@ def _check_server(report, contracts, target):
     client, discovered = None, None
     try:
         client = scan.StdioClient(target, None, env)
-        discovered = client.initialize(PROTOCOL)
+        discovered = client.initialize(protocol)
     except Exception as exc:
         stage = "start" if client is None else "handshake"
         report.add("FAIL", f"server {stage} failed ({type(exc).__name__})")
@@ -260,7 +265,8 @@ def _check_server(report, contracts, target):
     if discovered is None:
         report.add("SKIP", "tool discovery needs a successful handshake")
     else:
-        report.add("OK", "handshake: initialize and tools/list answered")
+        discovery = "server/discover" if protocol == scan.MODERN_PROTOCOL else "initialize"
+        report.add("OK", f"handshake: {discovery} and tools/list answered ({protocol})")
         for tool in sorted(contracts["tools"]):
             if tool in discovered:
                 report.add("OK", f"{tool} is advertised by the server")
