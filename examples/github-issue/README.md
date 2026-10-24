@@ -117,6 +117,36 @@ the pack's reference directories and hash manifest identify these observations.
 
 ## CI and future adaptation
 
+### Reference pack through local MCP (Phase D2)
+
+The additional [integration check](../../tests/test_github_issue_mcp.py) configures
+this same template and tracked stdio fixture for a loopback authority, pins the
+exact contract bytes in a registry, and prepares one fresh single-use C2 grant:
+
+```text
+python -c "from pathlib import Path; Path('fourgate-output').mkdir(exist_ok=True)"
+python -B -m pytest -q -s tests/test_github_issue_mcp.py --basetemp fourgate-output/github-issue-d2-001
+```
+
+The first command creates the output parent on a fresh checkout and preserves
+an existing directory's contents. Pytest requires that parent to exist when
+using the nested `--basetemp` path above.
+
+Choose a **new** basetemp path: pytest may clear an existing one. Never point it
+at prior evidence, a consumed grant or an existing execution database. The test
+records `D2_COUNTS` and `d2-counts.json` inside its fresh fixture directory.
+Static validation must start no target and perform no read-back. Fresh
+`run_workflow` must make one simulated update and one GET, returning typed PASS.
+Report retrieval, repeated run requests and a restarted scripted stdio
+client/server must return saved results with `new_execution: false`, adding no
+target starts, calls or GETs. Structural payloads are checked for allowed fields,
+size and absence of private fixture values/paths; saved PASS is not fresh
+read-back. This is a scripted local wire integration check, not installed Codex
+app-server/Desktop acceptance or live GitHub schema validation. It does not
+repeat D1's induced controls. Existing pytest CI collection includes this test;
+no CI change is required. See
+[D2 evidence and per-command counts](../../docs/evidence/github-issue-mcp-2026-10-23.md).
+
 The normal repository pytest job runs
 [`tests/test_github_issue_reference.py`](../../tests/test_github_issue_reference.py)
 on its existing matrix. To reproduce manually in an already prepared CI source
