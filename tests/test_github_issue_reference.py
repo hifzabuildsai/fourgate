@@ -17,6 +17,9 @@ def test_reference_expectations_come_from_the_reviewed_request():
     data = load_contract(PACK / 'scan.example.json', 'disposable-github-issue')
     case = data['cases'][0]
     assert len(data['cases']) == 1
+    assert data['write_tools'] == ['issue_write']
+    assert case['tool'] == 'issue_write'
+    assert case['arguments']['method'] == 'update'
     assert case['readback']['repository'] == case['arguments']['owner'] + '/' + case['arguments']['repo']
     assert case['readback']['missing_is_fail'] is False
     assert case['readback']['expected_fields'] == {
@@ -25,7 +28,8 @@ def test_reference_expectations_come_from_the_reviewed_request():
     for field in case['readback']['expected_fields'].values():
         assert extract[field]['source'] == 'arguments'
     assert extract['expected_number']['path'] == 'issue_number'
-    assert extract['returned_number']['source'] == 'result'
+    assert extract['lookup_number'] == {'source': 'arguments', 'path': 'issue_number'}
+    assert 'record_id_field' not in case['outcome_contract']
 
 
 @pytest.mark.parametrize('observed_number,missing_number,expected', [
@@ -38,7 +42,7 @@ def test_github_template_binds_approved_identity_not_tool_claims(monkeypatch, ob
     case['readback'].update(repository='reference-owner/disposable', attempts=1)
     arguments = {**case['arguments'], 'owner': 'reference-owner', 'repo': 'disposable',
                  'issue_number': 73, 'title': 'Approved title', 'body': 'Approved body', 'state': 'open'}
-    response = {'result': {'structuredContent': {'number': 73, 'title': 'Untrusted claimed title'}}}
+    response = {'result': {'structuredContent': {'id': 'node-73', 'url': 'https://example.invalid/issues/73'}}}
     document = {'number': observed_number, 'title': arguments['title'], 'body': arguments['body'], 'state': 'open'}
     if missing_number:
         del document['number']
@@ -75,6 +79,8 @@ def test_local_reference_pack_reports_real_verdicts_without_repeating_the_write(
     ]
     trace = [json.loads(line) for line in (output / 'target-requests.jsonl').read_text().splitlines()]
     assert sum(r['method'] == 'tools/call' for r in trace) == 1
+    assert trace[-1]['params']['name'] == 'issue_write'
+    assert trace[-1]['params']['arguments']['method'] == 'update'
     assert trace[-1]['params']['arguments']['issue_number'] == 73
     assert manifest['readback_gets'] == 6
     assert manifest['authority_unchanged_by_controls'] is True

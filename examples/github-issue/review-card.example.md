@@ -9,10 +9,10 @@ scan bytes before authorizing a target call. Keep credential values out of it.
 | Owner / disposable account | Name the human owner and authorized disposable repository |
 | Record identity | Exact owner/repo and positive Issue number; confirm this is not a PR |
 | Request intent | Exact approved title, body and requested state; why this update is wanted |
-| Target mapping | Reviewed executable/version, stdio protocol, actual update tool, argument schema and returned-number selector |
+| Target mapping | Reviewed executable/version, stdio protocol, `issue_write` update schema and actual `{id,url}` success shape |
 | Repository binding | Review arguments.owner/repo against the fixed readback.repository; neither is inferred from result prose |
 | Read identity | Separate read credential name, known-record visibility and independently established permissions; no secret values |
-| Predicate | GET number equals request issue_number; title/body/state equal approved request arguments |
+| Predicate | GET uses the approved request issue_number; observed number/title/body/state equal approved request arguments |
 | Evidence budget | Review 1 attempt / 1500 ms in the template; choose bounded GET retries if separately needed |
 | Write budget | Exact approved target-call count, target startup effects, disposable scope and separately approved cleanup |
 | 404 semantics | Ambiguous by default; missing_is_fail remains false without a reviewed visibility/absence basis |

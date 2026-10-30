@@ -21,8 +21,8 @@ def main():
         if method == 'server/discover':
             result = {'supportedVersions': ['2026-07-28'], 'capabilities': {'tools': {}}}
         elif method == 'tools/list':
-            result = {'tools': [{'name': 'update_issue', 'inputSchema': {'type': 'object'}}]}
-        elif method == 'tools/call' and params['name'] == 'update_issue':
+            result = {'tools': [{'name': 'issue_write', 'inputSchema': {'type': 'object'}}]}
+        elif method == 'tools/call' and params['name'] == 'issue_write':
             # Independently cap the entire local demonstration to one protected call.
             with (directory / 'write.claim').open('x') as handle:
                 handle.write('one local simulated update\n')
@@ -30,14 +30,18 @@ def main():
             approved = json.loads((directory / 'approved-request.json').read_text())
             if arguments != approved:
                 raise ValueError('request differs from local review card')
+            if arguments.get('method') != 'update':
+                raise ValueError('reference pack permits only issue_write update')
             existing = json.loads((directory / 'authority.json').read_text())
             if existing['number'] != arguments['issue_number']:
                 raise ValueError('preselected local Issue is unavailable')
             document = {'number': arguments['issue_number'], **{
                 field: arguments[field] for field in ('title', 'body', 'state')}}
             (directory / 'authority.json').write_text(json.dumps(document), encoding='utf-8')
-            result = {'structuredContent': {'number': arguments['issue_number'],
-                      'title': 'UNTRUSTED TOOL CLAIM - NOT AN EXPECTATION'},
+            # Mirror the official issue_write minimal success shape. The
+            # approved Issue number and expected fields never come from it.
+            result = {'structuredContent': {'id': 'synthetic-node-73',
+                      'url': 'https://github.example/reference-owner/disposable/issues/73'},
                       'content': [], 'isError': False}
         else:
             raise ValueError('unapproved fixture method')

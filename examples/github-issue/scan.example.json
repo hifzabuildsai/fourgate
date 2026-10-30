@@ -7,10 +7,11 @@
     "protocol_version": "2026-07-28",
     "call_timeout_ms": 5000
   },
-  "write_tools": ["update_issue"],
+  "write_tools": ["issue_write"],
   "cases": [{
-    "tool": "update_issue",
+    "tool": "issue_write",
     "arguments": {
+      "method": "update",
       "owner": "REPLACE_WITH_TEST_OWNER",
       "repo": "REPLACE_WITH_TEST_REPO",
       "issue_number": 73,
@@ -19,9 +20,8 @@
       "state": "open"
     },
     "outcome_contract": {
-      "record_id_field": "returned_number",
       "extract": {
-        "returned_number": {"source": "result", "path": "result.structuredContent.number"},
+        "lookup_number": {"source": "arguments", "path": "issue_number"},
         "expected_number": {"source": "arguments", "path": "issue_number"},
         "title": {"source": "arguments", "path": "title"},
         "body": {"source": "arguments", "path": "body"},
@@ -31,7 +31,7 @@
     "readback": {
       "type": "github_issue",
       "repository": "REPLACE_WITH_TEST_OWNER/REPLACE_WITH_TEST_REPO",
-      "issue_number_field": "returned_number",
+      "issue_number_field": "lookup_number",
       "token_env": "FOURGATE_GITHUB_READ_TOKEN",
       "expected_fields": {"number": "expected_number", "title": "title", "body": "body", "state": "state"},
       "attempts": 1,

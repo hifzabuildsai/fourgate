@@ -64,7 +64,7 @@ def test_reference_pack_single_use_mcp_execution_and_restart(tmp_path):
     case['readback'] = {key: value for key, value in case['readback'].items()
                         if key not in ('repository', 'issue_number_field', 'missing_is_fail')}
     case['readback'].update(type='http', url_template=(
-        f'http://127.0.0.1:{httpd.server_port}/repos/reference-owner/disposable/issues/{{returned_number}}'))
+        f'http://127.0.0.1:{httpd.server_port}/repos/reference-owner/disposable/issues/{{lookup_number}}'))
     assert case['outcome_contract'] == template['cases'][0]['outcome_contract']
     assert case['readback']['expected_fields'] == template['cases'][0]['readback']['expected_fields']
     save(contract, local)

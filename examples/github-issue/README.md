@@ -14,18 +14,22 @@ target or approval. The selected repository is fixed in `readback.repository`;
 review that it exactly equals `arguments.owner + '/' + arguments.repo`.
 Confirm that the chosen record is an Issue, not a pull request.
 
-`update_issue` and `result.structuredContent.number` describe the local fixture's
-logical schema. They do not assert compatibility with a current GitHub MCP
-release. Discover the actual authorized **local stdio** server's tool/schema
-and review its command, protocol and response selector before adapting these
-placeholders. Do not send fixture-specific arguments to an unreviewed server.
+The template uses the official GitHub MCP Server v2.0.3 `issue_write` schema
+documented in [the dated compatibility evidence](../../docs/evidence/github-mcp-compatibility-2026-10-31.md):
+`method: "update"` plus the reviewed owner, repository, Issue number and fields.
+That release returns a minimal `{id, url}` success object, so neither lookup
+identity nor expected state is extracted from the tool response. The separately
+reviewed request's `issue_number` selects the GET and is also the expected
+observed number. Expected `title`, `body` and `state` likewise come only from
+request arguments. Strings use exact equality; no normalization or body-null
+substitution is implied. The illustrative contract checks current `open` state
+because the reviewed update explicitly requests it.
 
-The tool's returned number selects the GET. It is **not** the expected identity:
-the independent response's `number` must equal the approved request's
-`issue_number`. Expected `title`, `body` and `state` also come from request
-arguments, never from claimed saved values. Strings use exact equality; no
-normalization or body-null substitution is implied. The illustrative contract
-checks current `open` state because the reviewed update explicitly requests it.
+The command remains intentionally unconfigured. Before adapting the template,
+discover the actual authorized **local stdio** server and review its executable,
+version, protocol, exposed tool schema and response shape. A later GitHub MCP
+release may differ from v2.0.3. Do not send these arguments to an unreviewed
+server or infer compatibility from the executable name alone.
 
 The existing `github_issue` read-back constructs a static HTTPS API URL in the
 reviewed repository, uses a separate `FOURGATE_GITHUB_READ_TOKEN`, and performs
@@ -72,8 +76,8 @@ the scanner and `fourgate.verify_http`:
 Controls are simulations/induced conditions, not naturally occurring defects.
 Each read uses one bounded GET. None repeats the target call or changes the
 local authority. The fixture additionally caps delivery to one protected call.
-Its claimed saved title intentionally differs from the approved title; a healthy
-PASS therefore cannot depend on copying the tool's claimed expectation.
+Its minimal success result contains only synthetic `id` and `url` values; a
+healthy PASS therefore cannot depend on copying tool-claimed saved fields.
 
 `acceptance.json` records actual statuses/reasons, expected-outcome comparison,
 request counts and contract hashes. Each reference directory contains JSON and
@@ -101,7 +105,7 @@ the pack's reference directories and hash manifest identify these observations.
   not a confirmed contradiction. Authentication, network, malformed-response
   and timeout failures remain UNKNOWN. Required fields that are present but
   contradict approved values can produce FAIL.
-- A matching response establishes configured equalities at observation time,
+- A matching read-back establishes configured equalities at observation time,
   subject to the selected read identity's visibility. The fixed repository and
   requested issue number bind this narrow lookup; they do not enumerate or prove
   token scopes, universal tenant isolation or trust in an arbitrary authority.
@@ -153,10 +157,12 @@ on its existing matrix. To reproduce manually in an already prepared CI source
 checkout, run the same local command with a unique `$RUNNER_TEMP` output path.
 No live secrets or new CI permissions are required for these local checks.
 
-For a separately authorized external check, adapt the reviewed template using
-[the existing manual-only CI example](../ci/fourgate-scan.yml) and its separate
-write/read credentials, report-privacy and concurrency guidance. That example
-can perform real writes; **it was not executed for D1**. This pack does not
+For a separately authorized external check, first discover and pin the actual
+official server version. The template is shaped for GitHub MCP Server v2.0.3
+`issue_write`; use [the existing manual-only CI example](../ci/fourgate-scan.yml)
+with the reviewed template and its separate write/read credentials,
+report-privacy and concurrency guidance. That example can perform real writes;
+**it was not executed for D1**. This pack does not
 authorize or validate an external server, workflow or customer CI. If opting
 into C2 later, follow [the existing execution guide](../../docs/local-mcp-execution.md)
 with fresh, separately approved grants; never reset or reuse consumed state.
