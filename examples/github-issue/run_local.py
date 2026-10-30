@@ -33,7 +33,7 @@ def main():
     except FileExistsError:
         parser.error('--out must not already exist')
     template = json.loads((PACK / 'scan.example.json').read_text())
-    approved = {'owner': 'reference-owner', 'repo': 'disposable', 'issue_number': 73,
+    approved = {'method': 'update', 'owner': 'reference-owner', 'repo': 'disposable', 'issue_number': 73,
                 'title': 'HUMAN-REVIEWED LOCAL TITLE', 'body': 'HUMAN-REVIEWED LOCAL BODY', 'state': 'open'}
     save(output / 'approved-request.json', approved)
     initial = {'number': 73, 'title': 'PREEXISTING LOCAL TITLE',
@@ -83,7 +83,7 @@ def main():
     config.pop('repository')
     config.pop('issue_number_field')
     config.pop('missing_is_fail')
-    config.update(type='http', url_template=prefix + '/controls/healthy/repos/reference-owner/disposable/issues/{returned_number}')
+    config.update(type='http', url_template=prefix + '/controls/healthy/repos/reference-owner/disposable/issues/{lookup_number}')
     save(output / 'scan-local.json', local)
     command = [sys.executable, '-B', '-m', 'fourgate', 'scan', str(output / 'scan-local.json'),
                '--confirm-test-account', 'disposable-github-issue', '--report-dir', str(output / 'healthy')]
@@ -99,11 +99,12 @@ def main():
         authority = (output / 'authority.json').read_bytes()
         assert json.loads(authority) != initial
         response = json.loads((output / 'target-responses.jsonl').read_text().splitlines()[-1])
-        # The result selects the lookup; all expected values come from the reviewed request.
-        extracted = {'returned_number': response['result']['structuredContent']['number'],
+        # The official tool returns only id/url. Lookup identity and all expected
+        # values come from the reviewed request, never the success response.
+        assert set(response['result']['structuredContent']) == {'id', 'url'}
+        extracted = {'lookup_number': approved['issue_number'],
                      'expected_number': approved['issue_number'], **{
                          field: approved[field] for field in ('title', 'body', 'state')}}
-        assert response['result']['structuredContent']['title'] != extracted['title']
         # Reuse the deterministic HTTP engine for read-only controls, with proxies disabled.
         previous_opener = readback.OPENER
         readback.OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), readback._NoRedirect())
@@ -123,7 +124,7 @@ def main():
                 directory.mkdir()
                 save(directory / 'readback.json', replay_config)
                 save(directory / 'extracted.json', values)
-                row = {'tool': 'update_issue', 'status': evaluation['status'].upper(),
+                row = {'tool': 'issue_write', 'status': evaluation['status'].upper(),
                        'reason_code': evaluation['reason_code'], 'attempts': evaluation['attempts']}
                 for key in ('checked_fields', 'mismatched_fields'):
                     if key in evaluation:
