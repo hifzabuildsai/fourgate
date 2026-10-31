@@ -2,7 +2,9 @@
 
 Fourgate catches MCP tools that say 'success' when nothing actually happened.
 
-**Status: early, pre-alpha.**
+**Status: limited beta (`0.4.0b1`).** The supported package paths are local
+command-configured stdio workflows; customer CI, complete Desktop UI execution
+and production reliability remain unvalidated.
 
 ## Results so far (2026-10-01)
 
@@ -37,8 +39,8 @@ The experimental [local MCP validation tool](docs/local-mcp-validation.md) lets
 an agent check one registered configuration using the same scanner loader.
 It reports static readiness and NOT RUN; it cannot execute workflows or verify
 an action. [Founder-reported Codex app-server checks](docs/evidence/windows-mcp-validation-2026-10-23.md)
-cover discovery and one explicit call; Desktop UI selection/reload remains
-NOT RUN. This source feature is not in the existing PyPI release.
+cover discovery and one explicit call; complete Desktop UI protected execution
+remains NOT RUN. The feature is included in the `0.4.0b1` limited-beta candidate.
 
 [Experimental MCP execution](docs/local-mcp-execution.md) adds `run_workflow`
 and `get_run_report` only with a separate operator policy and prepared single-use
@@ -81,25 +83,24 @@ reports. See [`PILOT.md`](PILOT.md) for pilot setup and
 
 ## Scan a disposable MCP test account (under five minutes)
 
-Python 3.10–3.13, Linux or Windows. Install from
-[PyPI](https://pypi.org/project/fourgate/):
+Python 3.10–3.13, Linux or Windows. After the limited beta is published, install
+the exact pre-release from [PyPI](https://pypi.org/project/fourgate/):
 
 ```bash
-python -m pip install fourgate
+python -m pip install --pre "fourgate==0.4.0b1"
 ```
 
 Check the install with `fourgate --version`. If the `fourgate` command is not
 found on PATH, `python -m fourgate` works the same way.
 
-Alternatively, install the v0.3.0 tag from GitHub:
+Alternatively, after the release tag exists, install the exact tag from GitHub:
 
 ```bash
-python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.3.0"
+python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.4.0b1"
 ```
 
-or the wheel attached to the
-[v0.3.0 GitHub Release](https://github.com/hifzabuildsai/fourgate/releases/tag/v0.3.0)
-(`python -m pip install fourgate-0.3.0-py3-none-any.whl`).
+or install the reviewed `fourgate-0.4.0b1-py3-none-any.whl` attached to the
+`v0.4.0b1` GitHub pre-release after checking its published SHA-256.
 
 Or, from a clean checkout of this repository (the bundled fixture below needs
 the checkout):

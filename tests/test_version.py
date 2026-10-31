@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 RUN_TIMEOUT = 60
 
 
-def test_version_is_0_3_0():
-    assert fourgate.__version__ == "0.3.0"
+def test_version_is_0_4_0b1():
+    assert fourgate.__version__ == "0.4.0b1"
 
 
 def test_installed_metadata_matches_package_version():
@@ -39,7 +39,7 @@ def test_version_flag_from_module_entry_point():
     result = subprocess.run([sys.executable, "-m", "fourgate", "--version"], cwd=ROOT,
                             capture_output=True, text=True, timeout=RUN_TIMEOUT)
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "fourgate 0.3.0\n"
+    assert result.stdout == "fourgate 0.4.0b1\n"
 
 
 @pytest.mark.parametrize("command, usage", [

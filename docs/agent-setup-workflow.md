@@ -10,7 +10,7 @@ Work in the user's project and preserve its instructions, changes and MCP config
 
 1. Record OS, project directory, coding client name/version if available, and the absolute
    Python interpreter used for Fourgate. Check `python -m fourgate --version` and
-   the relevant `--help` output with that interpreter. Expect the v0.3.0 interface;
+   the relevant `--help` output with that interpreter. Expect the `0.4.0b1` limited-beta interface;
    inspect differences before using another version. If missing, prepare a local
    virtual environment and use the project's approved installation source. Do not
    purchase API access, upgrade a global installation or change the project's dependencies.

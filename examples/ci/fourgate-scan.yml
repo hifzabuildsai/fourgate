@@ -40,8 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # EDIT: Fourgate release tag to install.
-      FOURGATE_REF: v0.3.0
+      # EDIT: reviewed Fourgate release tag to install. This tag is available
+      # only after the corresponding pre-release is published.
+      FOURGATE_REF: v0.4.0b1
       # EDIT: path to your scan contract in this repository.
       FOURGATE_CONTRACT: fourgate/scan-contract.json
       # EDIT: must equal server.test_account in the contract. Fourgate refuses

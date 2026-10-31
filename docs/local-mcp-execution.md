@@ -3,8 +3,8 @@
 `run_workflow` and `get_run_report` reuse the existing scanner and deterministic
 verifier. The default `fourgate mcp --registry PATH` remains
 [read-only validation](local-mcp-validation.md). Execution requires a separate
-operator policy and explicitly prepared local state. These source features are
-not in the existing PyPI 0.3.0 release.
+operator policy and explicitly prepared local state. These features are included
+in the `0.4.0b1` limited-beta package.
 
 No model key, paid service, hosted database or new pip dependency is needed.
 Execution state uses Python's optional standard-library `sqlite3` module; a
