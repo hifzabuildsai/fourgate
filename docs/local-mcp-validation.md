@@ -5,7 +5,7 @@ typed static configuration readiness. This reuses the scanner's contract loader;
 it does not start the target server, run a verifier, contact a system of record
 or execute a write. It does not verify an action outcome.
 
-This source change is not in the existing PyPI 0.3.0 release. There are no new
+This tool is included in the `0.4.0b1` limited-beta package. There are no new
 runtime dependencies or model API requirements. The existing CLI remains an
 execution path for approved regression checks; [C2 opt-in execution](local-mcp-execution.md)
 adds separately authorized run/report tools.

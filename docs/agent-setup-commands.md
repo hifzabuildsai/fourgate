@@ -1,4 +1,4 @@
-# Fourgate v0.3.0 command reference
+# Fourgate 0.4.0b1 limited-beta command reference
 
 Use the selected Python interpreter for every invocation. `python` below is a
 placeholder for its absolute path, not a requirement for the user to type commands.
@@ -69,13 +69,13 @@ normalizes unavailable verification to UNKNOWN. Never interpret stderr as a
 confirmed verdict. Keep extracted identifiers/values and raw responses private;
 review reports before sharing.
 
-## Explicit protocol selection (source change, not yet released)
+## Explicit protocol selection
 
 The scaffold and doctor default to legacy `2024-11-05`. For an explicitly
 selected native `2026-07-28` server, review an edit to
 `scan.json` → `server.protocol_version` and pass
-`--protocol-version 2026-07-28` to doctor, before `--`. Inspect installed help:
-the existing PyPI 0.3.0 release does not contain this new option.
+`--protocol-version 2026-07-28` to doctor, before `--`. This option is included
+in the `0.4.0b1` limited-beta package; inspect the installed help before use.
 No automatic era probing/downgrade or multi-round input completion is offered.
 Protocol discovery readiness does not establish runtime guard compatibility.
 

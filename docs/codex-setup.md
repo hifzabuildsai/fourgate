@@ -13,8 +13,9 @@ Automatic activation was **not observed**; the regression exercise used manual
 skill selection. See the [dated operator report](evidence/windows-codex-2026-10-23.md)
 for provenance and exact limits. Windows artifacts were not independently read
 in the implementation environment. Client configuration/reload, runtime shadow
-routing and external workflows remain unvalidated. The source changes are not
-in the existing PyPI 0.3.0 release.
+routing and external workflows remain unvalidated. The CLI changes are included
+in the `0.4.0b1` limited-beta package; the repository skill is distributed
+separately and complete Desktop UI protected execution remains unvalidated.
 
 ## Discover the skill without a live write
 

@@ -1,6 +1,7 @@
 # Fourgate engineering handoff
 
-Release: `v0.3.0` is on PyPI; product maturity remains early, pre-alpha.
+Published release: `v0.3.0`. The source version is the proposed limited-beta
+pre-release `0.4.0b1`; it is not published or tagged by this preparation.
 GitHub Issue read-back and founder-owned hosted CI validation are documented in
 [the dated evidence note](docs/evidence/github-validation-2026-10-12.md).
 The later [D4 hosted record](docs/evidence/github-issue-d4-hosted-2026-10-31.md)
@@ -72,8 +73,10 @@ remain separate and unvalidated. No live acceptance was rerun for closeout.
 The [31 October limited-beta candidate record](docs/evidence/limited-beta-candidate-2026-10-31.md)
 records isolated package checks, the demonstrated default-test-discovery fix,
 preserved failed checks and the remaining release checklist. Candidate artifacts
-retain version `0.3.0`; this preparation is not a published release or a maturity
-upgrade. Resolve the recorded release gates before distribution.
+there retain historical version `0.3.0`. The later
+[`0.4.0b1` release note](docs/releases/0.4.0b1.md) defines the proposed
+limited-beta package, verified paths and remaining scope limits. Preparation is
+not publication; use only artifacts whose final hashes match that release note.
 
 ## Purpose and supported path
 
