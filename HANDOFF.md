@@ -16,9 +16,9 @@ Automatic activation was not observed; actual shadow routing and external
 onboarding remain pending. These source changes are not a new PyPI release.
 
 Phase C1 adds [read-only local MCP validation](docs/local-mcp-validation.md)
-through `validate_workflow`. Workflow execution and report retrieval tools are
-not implemented in this increment; client acceptance and the remaining write
-grant/budget controls must stay explicit.
+through `validate_workflow`. This tool reports static readiness, never an action
+PASS; C2 below supplies separately authorized execution/report retrieval and
+write grant/budget controls.
 The [dated C1 evidence note](docs/evidence/local-mcp-validation-2026-10-23.md)
 records local and hosted checks. A later
 [founder-reported app-server check](docs/evidence/windows-mcp-validation-2026-10-23.md)
@@ -30,9 +30,10 @@ the shared scanner. Separate operator grants, prepared local SQLite state,
 durable reservation and call budgets govern execution. C1 validation stays
 read-only. A [founder-reported C2 app-server check](docs/evidence/windows-mcp-execution-2026-10-23.md)
 at `c0e06f0e` records local PASS, induced FAIL/UNKNOWN and replay without extra
-target/verifier calls. Raw Windows artifacts were not independently reviewed
-here. Desktop UI acceptance, reference-pack work and external owner/customer CI
-remain separate gates; no release/maturity upgrade is implied.
+target/verifier calls. That dated C2 record did not independently review the raw
+Windows artifacts. Desktop UI acceptance and external owner/customer CI remain
+separate gates; subsequent reference-pack integration and live GitHub acceptance
+are recorded in D2/D3 below. No release/maturity upgrade is implied.
 The [dated C2 evidence record](docs/evidence/local-mcp-execution-2026-10-23.md)
 separates implementation checks from founder-reported client and pending customer evidence.
 
@@ -41,7 +42,18 @@ one preselected Issue update with request-derived identity/title/body/state
 predicates, local matching state and read-only induced controls. It reuses the
 scanner, deterministic HTTP read-back and report format. No C2 grant is rerun.
 See [the D1 evidence record](docs/evidence/github-issue-reference-2026-10-23.md);
-external adaptation and customer/production acceptance remain pending.
+D3 below records the subsequent separately authorized GitHub adaptation;
+customer/production acceptance remains pending.
+
+Phase D2 records [scripted local MCP integration](docs/evidence/github-issue-mcp-2026-10-23.md)
+with single-use grants and saved-report/replay controls. The
+[31 October D3 live GitHub record](docs/evidence/github-issue-d3-live-2026-10-31.md)
+then records fresh and saved typed PASS at source `c5d61fbd`, one protected update
+and one outcome GET, with zero added execution on report retrieval. Cleanup of
+the existing disposable Issue was independently confirmed closed after PASS
+evidence was preserved. All three authorized mutations are consumed; earlier
+HTTP 401 preflight stops remain NOT_RUN, not Fourgate outcome verdicts. This is
+scripted local stdio acceptance, not Desktop UI or customer/production evidence.
 
 ## Purpose and supported path
 
