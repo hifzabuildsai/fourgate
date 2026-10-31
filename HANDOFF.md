@@ -3,6 +3,8 @@
 Release: `v0.3.0` is on PyPI; product maturity remains early, pre-alpha.
 GitHub Issue read-back and founder-owned hosted CI validation are documented in
 [the dated evidence note](docs/evidence/github-validation-2026-10-12.md).
+The later [D4 hosted record](docs/evidence/github-issue-d4-hosted-2026-10-31.md)
+records bounded founder-owned hosted acceptance of the reference pack.
 Customer CI and production reliability remain unvalidated. The earlier release
 history and operator evidence below must be read with their dates and limits.
 See [the 22 October coverage audit](docs/evidence/engineering-2026-10-22.md) and
@@ -23,7 +25,9 @@ The [dated C1 evidence note](docs/evidence/local-mcp-validation-2026-10-23.md)
 records local and hosted checks. A later
 [founder-reported app-server check](docs/evidence/windows-mcp-validation-2026-10-23.md)
 adds discovery and one explicit CONFIG_VALID / STATIC_CONFIG_ONLY / NOT_RUN
-call at `dde4e1a9`; Desktop UI selection/reload remains NOT RUN.
+call at `dde4e1a9`; that dated record did not cover Desktop UI selection/reload.
+The [31 October bounded Desktop record](docs/evidence/codex-desktop-2026-10-31.md)
+adds static readiness, while its protected execution attempt remained NOT_RUN.
 
 Phase C2 adds [opt-in execution/report tools](docs/local-mcp-execution.md) over
 the shared scanner. Separate operator grants, prepared local SQLite state,
@@ -31,9 +35,10 @@ durable reservation and call budgets govern execution. C1 validation stays
 read-only. A [founder-reported C2 app-server check](docs/evidence/windows-mcp-execution-2026-10-23.md)
 at `c0e06f0e` records local PASS, induced FAIL/UNKNOWN and replay without extra
 target/verifier calls. That dated C2 record did not independently review the raw
-Windows artifacts. Desktop UI acceptance and external owner/customer CI remain
-separate gates; subsequent reference-pack integration and live GitHub acceptance
-are recorded in D2/D3 below. No release/maturity upgrade is implied.
+Windows artifacts. Complete Desktop protected execution and external
+owner/customer CI remain separate gates; subsequent reference-pack integration
+and live GitHub acceptance are recorded in D2-D4 below. No release/maturity
+upgrade is implied.
 The [dated C2 evidence record](docs/evidence/local-mcp-execution-2026-10-23.md)
 separates implementation checks from founder-reported client and pending customer evidence.
 
@@ -54,6 +59,21 @@ the existing disposable Issue was independently confirmed closed after PASS
 evidence was preserved. All three authorized mutations are consumed; earlier
 HTTP 401 preflight stops remain NOT_RUN, not Fourgate outcome verdicts. This is
 scripted local stdio acceptance, not Desktop UI or customer/production evidence.
+
+Phase D4 records [founder-owned hosted GitHub acceptance](docs/evidence/github-issue-d4-hosted-2026-10-31.md)
+at Fourgate source `9107a48e` and reviewed workflow commit `4ea01eca`: one
+dispatch, matching fresh/saved typed PASS, one live target start/call/outcome GET,
+and PASS-only cleanup independently verified closed. Downloaded reviewed
+artifacts and consumed state remain preserved. Its three-Issue-mutation budget
+is exhausted, with no write/dispatch retries. This closes the bounded hosted
+founder gate; customer CI, complete Desktop execution and production reliability
+remain separate and unvalidated. No live acceptance was rerun for closeout.
+
+The [31 October limited-beta candidate record](docs/evidence/limited-beta-candidate-2026-10-31.md)
+records isolated package checks, the demonstrated default-test-discovery fix,
+preserved failed checks and the remaining release checklist. Candidate artifacts
+retain version `0.3.0`; this preparation is not a published release or a maturity
+upgrade. Resolve the recorded release gates before distribution.
 
 ## Purpose and supported path
 

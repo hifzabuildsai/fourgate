@@ -166,6 +166,20 @@ GET and independently confirmed cleanup of the existing disposable Issue.
 Its three-mutation budget is exhausted. This is preserved evidence, not rerun
 authorization, Desktop UI acceptance or customer/production validation.
 
+### Recorded founder-owned hosted acceptance (Phase D4)
+
+The [31 October D4 evidence](../../docs/evidence/github-issue-d4-hosted-2026-10-31.md)
+records one separately authorized hosted dispatch at pinned workflow/Fourgate
+commits, fresh and saved live PASS, one protected update/outcome GET and verified
+PASS-only cleanup. Downloaded structural artifacts and consumed state were
+reconciled offline. Its three-Issue-mutation budget is exhausted; the record
+does not authorize a rerun or establish customer CI or complete Desktop UI
+acceptance. Raw contract/registry/policy files were intentionally not uploaded.
+
+The separate [limited-beta candidate record](../../docs/evidence/limited-beta-candidate-2026-10-31.md)
+documents isolated built-package checks and remaining release gates. Those local
+fixture checks add no D4 mutations or customer/Desktop acceptance evidence.
+
 ### Future separately authorized adaptation
 
 For a separately authorized external check, first discover and pin the actual
