@@ -157,6 +157,17 @@ on its existing matrix. To reproduce manually in an already prepared CI source
 checkout, run the same local command with a unique `$RUNNER_TEMP` output path.
 No live secrets or new CI permissions are required for these local checks.
 
+### Recorded live GitHub acceptance (Phase D3)
+
+The [31 October D3 evidence](../../docs/evidence/github-issue-d3-live-2026-10-31.md)
+records separately authorized live v2.0.3 acceptance through a scripted local
+MCP client: one protected update, matching fresh/saved typed PASS, one outcome
+GET and independently confirmed cleanup of the existing disposable Issue.
+Its three-mutation budget is exhausted. This is preserved evidence, not rerun
+authorization, Desktop UI acceptance or customer/production validation.
+
+### Future separately authorized adaptation
+
 For a separately authorized external check, first discover and pin the actual
 official server version. The template is shaped for GitHub MCP Server v2.0.3
 `issue_write`; use [the existing manual-only CI example](../ci/fourgate-scan.yml)
