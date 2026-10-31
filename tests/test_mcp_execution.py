@@ -411,8 +411,15 @@ def test_invalid_or_changed_operator_policy_refuses_execution(tmp_path, problem)
         assert not (tmp_path / "execution.sqlite3").exists()
 
 
-def test_verifier_only_custom_credential_reaches_verifier_but_not_target(tmp_path):
-    registry, policy, contract, _, trace, env = setup(tmp_path, credential=True)
+@pytest.mark.parametrize("reply,verdict,reason", [
+    ({"status": "pass"}, "PASS", "postcondition_satisfied"),
+    ({"status": "fail", "reason_code": "record_missing"}, "FAIL", "record_missing")])
+def test_custom_credential_launch_environment_isolated_from_real_target(tmp_path, monkeypatch, reply, verdict, reason):
+    from fourgate import scan
+    from fourgate.execution import ExecutionPolicy, ExecutionState, WorkflowRunner
+    from fourgate.workflows import WorkflowRegistry
+
+    registry, policy, contract, store, trace, env = setup(tmp_path, credential=True)
     original = json.loads(contract.read_text())
     marker, probe = tmp_path / "env.json", tmp_path / "probe.py"
     probe.write_text("import json,os,runpy,sys\nfrom pathlib import Path\n"
@@ -421,18 +428,40 @@ def test_verifier_only_custom_credential_reaches_verifier_but_not_target(tmp_pat
         f"sys.argv={original['server']['command'][1:]!r}\n"
         "runpy.run_path(sys.argv[0],run_name='__main__')\n", encoding="utf-8")
     original["server"]["command"] = [sys.executable, str(probe)]
-    verifier = tmp_path / "verify_secret.py"
-    verifier.write_text("import os,runpy\n"
-        "assert os.environ.get('FOURGATE_C2_READ_SECRET') == 'local-fake-read-value'\n"
-        f"runpy.run_path({str(ROOT/'fixtures/outcome_verifier.py')!r},run_name='__main__')\n", encoding="utf-8")
-    original["cases"][0]["outcome_contract"]["verifier"]["command"] = [sys.executable, str(verifier)]
     contract.write_text(json.dumps(original), encoding="utf-8")
     repin(registry, policy, contract)
-    env.update(FOURGATE_C2_READ_SECRET="local-fake-read-value", FOURGATE_C2_WRITE_TOKEN="local-fake-write-value")
-    prepare(registry, policy, env)
-    output = run(registry, policy, env, [call()])
-    assert output[0]["result"]["structuredContent"]["verdict"] == "PASS"
+    monkeypatch.setenv("FOURGATE_DEMO_STORE", env["FOURGATE_DEMO_STORE"])
+    monkeypatch.setenv("FOURGATE_C2_READ_SECRET", "local-fake-read-value")
+    monkeypatch.setenv("FOURGATE_C2_WRITE_TOKEN", "local-fake-write-value")
+    configured = WorkflowRegistry(registry)
+    grant = ExecutionPolicy(policy, configured)
+    ExecutionState.prepare(grant)
+    runner = WorkflowRunner(configured, grant)
+    launches = []
+
+    def verifier_transport(command, **kwargs):
+        # Test this launch boundary without racing interpreter startup against
+        # 500 ms. Runtime/guard tests separately cover a real verifier child.
+        launches.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(reply).encode())
+
+    monkeypatch.setattr(scan.outcome.subprocess, "run", verifier_transport)
+    output = runner.run("local-demo", "approved-run")
+    assert (output["run_state"], output["action_status"], output["verdict"]) == (
+        "COMPLETED", "ATTEMPTED", verdict)
+    assert output["cases"] == [{"case_index": 1, "status": verdict, "reason_code": reason}]
+    assert output["reserved_tool_calls"] == output["call_attempts"] == len(launches) == 1
+    command, kwargs = launches[0]
+    assert command == [sys.executable, str(ROOT / "fixtures/outcome_verifier.py")]
+    assert kwargs["timeout"] == 0.5
+    assert kwargs["env"]["FOURGATE_C2_READ_SECRET"] == "local-fake-read-value"
+    assert kwargs["env"]["FOURGATE_C2_WRITE_TOKEN"] == "local-fake-write-value"
+    assert json.loads(kwargs["input"]) == {
+        "issue_id": "ISSUE-001", "title": "PRIVATE-ARGUMENT-SENTINEL"}
     assert json.loads(marker.read_text()) == {"read": False, "write": True}
+    assert json.loads(store.read_text())[0]["title"] == "PRIVATE-ARGUMENT-SENTINEL"
+    assert runner.get_report("approved-run") == {**output, "new_execution": False}
+    assert len(launches) == 1
     assert "local-fake" not in json.dumps(output) and len(writes(trace)) == 1
 
 

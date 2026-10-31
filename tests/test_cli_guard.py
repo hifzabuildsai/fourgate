@@ -495,7 +495,51 @@ def test_enforce_fails_open_on_verifier_faults(tmp_path, verifier_mode, reason):
     assert guarded == direct
     assert guarded_bytes == direct_bytes
     [record] = _records(log)
-    assert (record["mode"], record["status"], record["reason_code"]) == ("enforce", "unknown", reason)
+    assert (record["mode"], record["status"]) == ("enforce", "unknown")
+    # The outer deadline can win while a timed-out process is being reaped.
+    # Neither timeout path may alter the response or become PASS/FAIL.
+    reasons = {reason, "gate_timeout_or_error"} if verifier_mode == "hang" else {reason}
+    assert record["reason_code"] in reasons
+
+
+def test_verifier_timeout_retains_precise_reason_without_process_timing(tmp_path, monkeypatch):
+    contract = outcome.load_strict(str(_write(tmp_path, _contract())))["tools"]["create_issue"]
+    response = {"jsonrpc": "2.0", "id": 1, "result": {"structuredContent": {"issue_id": "ISSUE-001"}}}
+
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+    monkeypatch.setattr(outcome.subprocess, "run", timeout)
+    result = outcome.evaluate(response, {"title": "local"}, "demo/create_issue", contract)
+    assert result == {"status": "unknown", "reason_code": "verifier_timeout"}
+
+
+def test_outer_gate_failure_preserves_wire_and_records_unknown(tmp_path, monkeypatch):
+    from wrap import wrap as runtime
+
+    contracts = outcome.load_strict(str(_write(tmp_path, _contract())))
+    tracker = runtime.CallTracker()
+    tracker.track_request(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "create_issue", "arguments": {"title": "local"}}}).encode())
+    response = (json.dumps({"jsonrpc": "2.0", "id": 1, "result": {
+        "content": [{"type": "text", "text": "Created ISSUE-001"}],
+        "structuredContent": {"issue_id": "ISSUE-001"}}})).encode()
+    monkeypatch.setattr(runtime, "_run_outcome_gate", lambda *args: None)
+    read_fd, write_fd = os.pipe()
+    log = tmp_path / "outcomes.jsonl"
+    try:
+        runtime._forward_response_line(response, write_fd, tracker, None, "demo",
+            outcome_contracts=contracts, outcome_mode="enforce", outcome_log_path=str(log))
+        os.close(write_fd)
+        write_fd = None
+        assert os.read(read_fd, len(response) + 2) == response + b"\n"
+    finally:
+        os.close(read_fd)
+        if write_fd is not None:
+            os.close(write_fd)
+    [record] = _records(log)
+    assert (record["mode"], record["status"], record["reason_code"]) == (
+        "enforce", "unknown", "gate_timeout_or_error")
 
 
 def test_relative_log_is_resolved_and_accepted_by_summary(tmp_path, capsys):
