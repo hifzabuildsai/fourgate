@@ -5,7 +5,23 @@ servers without outside help: set up, write a contract, run the two standard
 checks twice, read the report, and file a bug upstream. Every command is for
 **Windows PowerShell 5.1**. The scanner's exact contract format is in
 [`specs/scan-contract-v1.md`](specs/scan-contract-v1.md), and the data flow
-is in [`SECURITY.md`](SECURITY.md).
+is in [`SECURITY.md`](SECURITY.md). Product overview:
+[`README.md`](README.md). Pilot / security review: [`PILOT.md`](PILOT.md).
+
+**Version: limited beta `0.4.0b1`.** Supported paths are local
+command-configured **stdio** workflows only. Customer CI, complete Desktop UI
+execution, and production reliability remain unvalidated. There is no Fourgate
+hosted endpoint, no telemetry, and no remote MCP transport. Independent
+read-back returns **PASS** / **FAIL** / **UNKNOWN**; shadow mode is default;
+enforce only on confirmed FAIL; runtime verifier budget is **2000 ms**; UNKNOWN
+fails open and is never PASS.
+
+Install the limited beta (or use the editable checkout in section 1):
+
+```powershell
+py -3 -m pip install --pre "fourgate==0.4.0b1"
+py -3 -m fourgate --version
+```
 
 Hard rules, every time:
 
@@ -16,7 +32,7 @@ Hard rules, every time:
   commit. Refer to keys by environment variable **name** only.
 - If a write times out, do not rerun it until you have checked the account by
   hand. It may already have happened.
-- **UNKNOWN is never FAIL.** A finding counts only after two matching runs.
+- **UNKNOWN is never FAIL and never PASS.** A finding counts only after two matching runs.
 
 ## One scan day at a glance
 
@@ -55,16 +71,28 @@ launchers. Therefore:
 
 ### Update Fourgate and check it works
 
+From a source checkout (preferred for operator scans that need fixtures and
+editable installs):
+
 ```powershell
 cd C:\hifzazafar\fourgate\fourgate
 git checkout main
 git pull
 .venv\Scripts\python.exe -m pip install -e ".[dev]"
+.venv\Scripts\python.exe -m fourgate --version
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-Only the first time, before the commands above: `py -3 -m venv .venv`.
-Expect every test to pass. If one fails, stop and do not scan.
+Expect `fourgate 0.4.0b1`. Only the first time, before the commands above:
+`py -3 -m venv .venv`. Expect every test to pass. If one fails, stop and do
+not scan.
+
+To install the published limited beta without a checkout (no bundled fixture
+paths):
+
+```powershell
+py -3 -m pip install --pre "fourgate==0.4.0b1"
+```
 
 ### Install the server under test (Node servers)
 

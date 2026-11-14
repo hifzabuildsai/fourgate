@@ -1,19 +1,100 @@
 # Fourgate
 
-Fourgate catches MCP tools that say 'success' when nothing actually happened.
+**Independent outcome verification for consequential AI-agent actions.**
 
-**Status: limited beta (`0.4.0b1`).** The supported package paths are local
-command-configured stdio workflows; customer CI, complete Desktop UI execution
-and production reliability remain unvalidated.
+Fourgate catches MCP tools that say `success` when nothing actually happened.
+After a contracted write reports success, it reads the system of record itself
+and returns **PASS**, **FAIL**, or **UNKNOWN** — no LLM in the verdict path.
 
-## Results so far (2026-10-01)
+[![Version](https://img.shields.io/badge/version-0.4.0b1-blue)](https://pypi.org/project/fourgate/0.4.0b1/)
+[![PyPI](https://img.shields.io/pypi/v/fourgate.svg?label=PyPI)](https://pypi.org/project/fourgate/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/hifzabuildsai/fourgate/ci.yml?branch=main&label=CI)](https://github.com/hifzabuildsai/fourgate/actions/workflows/ci.yml)
 
-Tested against 4 official vendor MCP servers from 4 companies (run locally over
+**Status: limited beta (`0.4.0b1`).** Supported paths are **local
+command-configured stdio** workflows only. Customer CI, complete Desktop UI
+execution, and production reliability remain **unvalidated**. There is no
+Fourgate hosted endpoint, no telemetry, and no remote MCP transport.
+
+[Install](#install) · [What it checks](#what-it-checks) · [Product flow](#product-flow) · [Results so far](#results-so-far) · [Architecture](#system-architecture) · [OPERATOR.md](OPERATOR.md) · [PILOT.md](PILOT.md) · [SECURITY.md](SECURITY.md)
+
+## Why this exists
+
+An MCP tool can return a protocol-valid success (`isError` absent) while the
+write never landed, landed wrong, or failed at the API. An agent that trusts
+that result will continue as if the world changed.
+
+Fourgate sits after the tool response for **explicitly contracted** tools and
+runs a deterministic independent read-back:
+
+- **Confirm the write** with a separate read credential and a GET to the
+  provider API you configure — not by trusting the connector's prose.
+- **Scan disposable accounts** with `fourgate scan` before you wrap live traffic.
+- **Shadow by default** so the agent still sees the original bytes while you
+  collect structural PASS / FAIL / UNKNOWN logs.
+- **Enforce only on confirmed FAIL** — prepend an attributed verdict; PASS and
+  UNKNOWN pass through. Verifier faults fail open. UNKNOWN is never PASS.
+- **Stay on your machines** — local process, local logs, local reports. No
+  Fourgate cloud.
+
+## Install
+
+Python 3.10–3.13, Linux or Windows. The limited-beta package is on PyPI today:
+
+```bash
+python -m pip install --pre "fourgate==0.4.0b1"
+python -m fourgate --version
+```
+
+Expected output: `fourgate 0.4.0b1`. If `fourgate` is not on `PATH`,
+`python -m fourgate` is equivalent.
+
+Alternatives: the reviewed wheel on the
+[`v0.4.0b1` GitHub pre-release](https://github.com/hifzabuildsai/fourgate/releases/tag/v0.4.0b1)
+(check the published SHA-256),
+`python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.4.0b1"`,
+or `python -m pip install .` from a clean checkout (needed for bundled fixtures).
+
+Stable PyPI `0.3.0` remains installable without `--pre`; use `0.4.0b1` for the
+current limited beta.
+
+## What it checks
+
+Independent read-back produces one of three outcomes. No LLM decides this.
+
+| Verdict | Meaning |
+| --- | --- |
+| **PASS** | Authoritative read-back matched the contracted fields. Connector response unchanged. |
+| **FAIL** | Read-back confirmed a missing or mismatched record. In **enforce**, Fourgate prepends `outcome_failed`; original content is preserved. In **shadow**, only the log changes. |
+| **UNKNOWN** | Cannot confirm (timeout, auth, network, malformed verifier, missing selector, internal fault). Fails open; response unchanged. **Never counted as PASS.** Runtime verifier budget: **2000 ms**. |
+
+Shadow mode is the default. Switch to enforce only for human-approved contracts
+after shadow traffic looks clean.
+
+## Product flow
+
+```text
+fourgate demo      # see it work: local, simulated, no keys, no network
+fourgate init      # write scan, runtime and read-back configs for one write tool
+fourgate doctor    # check the setup without side effects
+fourgate scan      # contracted writes against a disposable test account
+fourgate guard     # wrap the server at runtime (shadow first, then enforce)
+fourgate summary   # turn outcomes.jsonl into a local HTML page
+```
+
+Operators: [`OPERATOR.md`](OPERATOR.md) (Windows PowerShell routine and
+contracts). Pilots / security review: [`PILOT.md`](PILOT.md) (what runs where,
+what is stored, where data goes).
+
+## Results so far
+
+Founder-run against **4 official vendor MCP servers** from 4 companies (local
 stdio against the vendors' live APIs), using disposable test accounts or
-deliberately invalid credentials so no real data could be changed.
+deliberately invalid credentials so no real data could be changed
+(snapshot **2026-10-01**).
 
 | Check | Result |
-|---|---|
+| --- | --- |
 | Servers where a write tool returned an API failure as a successful tool result (no `isError`) | **3 of 4**, each reproduced at least twice, reported upstream |
 | Healthy write verified by independent read-back | 1 server: PASS, with FAIL and UNKNOWN controls behaving as specified |
 | Runtime shadow calls from a real agent client | 2 of 2 PASS |
@@ -24,9 +105,10 @@ the call failed. Fourgate reports these as `UNKNOWN / success_without_record_id`
 rather than PASS. Vendors are not named here; details are under
 [Field evidence](#field-evidence).
 
-Operators running scans against real MCP servers: see [`OPERATOR.md`](OPERATOR.md) for the step-by-step Windows guide and contract templates.
+Later bounded GitHub Issue local + founder-owned hosted CI controls are
+recorded separately; **customer CI validation remains pending.**
 
-Evaluating a pilot: [`PILOT.md`](PILOT.md) explains what runs where, what is stored, and where your data goes.
+### Experimental agent setup and local MCP tools
 
 Using Codex or Claude Code for setup: the experimental
 [`fourgate-setup` project entries](docs/codex-setup.md) ([Claude guide](docs/claude-code-setup.md)) share one local stdio
@@ -40,7 +122,7 @@ an agent check one registered configuration using the same scanner loader.
 It reports static readiness and NOT RUN; it cannot execute workflows or verify
 an action. [Founder-reported Codex app-server checks](docs/evidence/windows-mcp-validation-2026-10-23.md)
 cover discovery and one explicit call; complete Desktop UI protected execution
-remains NOT RUN. The feature is included in the `0.4.0b1` limited-beta candidate.
+remains NOT RUN. The feature is included in `0.4.0b1`.
 
 [Experimental MCP execution](docs/local-mcp-execution.md) adds `run_workflow`
 and `get_run_report` only with a separate operator policy and prepared single-use
@@ -83,47 +165,8 @@ reports. See [`PILOT.md`](PILOT.md) for pilot setup and
 
 ## Scan a disposable MCP test account (under five minutes)
 
-Python 3.10–3.13, Linux or Windows. After the limited beta is published, install
-the exact pre-release from [PyPI](https://pypi.org/project/fourgate/):
-
-```bash
-python -m pip install --pre "fourgate==0.4.0b1"
-```
-
-Check the install with `fourgate --version`. If the `fourgate` command is not
-found on PATH, `python -m fourgate` works the same way.
-
-Alternatively, after the release tag exists, install the exact tag from GitHub:
-
-```bash
-python -m pip install "git+https://github.com/hifzabuildsai/fourgate@v0.4.0b1"
-```
-
-or install the reviewed `fourgate-0.4.0b1-py3-none-any.whl` attached to the
-`v0.4.0b1` GitHub pre-release after checking its published SHA-256.
-
-Or, from a clean checkout of this repository (the bundled fixture below needs
-the checkout):
-
-```bash
-python -m pip install .
-```
-
-The product flow on one screen:
-
-```text
-fourgate demo      # see it work: local, simulated, no keys, no network
-fourgate init      # write scan, runtime and read-back configs for one write tool
-fourgate doctor    # check the setup without side effects
-fourgate scan      # contracted writes against a disposable test account
-fourgate guard     # wrap the server at runtime (shadow first, then enforce)
-fourgate summary   # turn outcomes.jsonl into a local HTML page
-```
-
-Each step is described below.
-
-For the bundled **local fixture only**, set a disposable store location and
-scan its deliberately broken issue creation. Bash:
+After install, for the bundled **local fixture only**, set a disposable store
+location and scan its deliberately broken issue creation. Bash:
 
 ```bash
 export FOURGATE_DEMO_STORE="$(mktemp -d)/issues.json"
@@ -140,7 +183,8 @@ $env:FOURGATE_DEMO_MODE = "broken"
 fourgate scan fixtures/contracts/scan_demo.json --confirm-test-account disposable-demo --report-dir ./fourgate-output
 ```
 
-The expected result is `FAIL / record_missing` (exit 1), with local
+The fixture paths need a source checkout (`python -m pip install .` from this
+repository). The expected result is `FAIL / record_missing` (exit 1), with local
 `fourgate-report.json` and self-contained `fourgate-report.html` in the chosen
 directory. Set `FOURGATE_DEMO_MODE=healthy` and rerun with a fresh store path to
 see PASS (exit 0). UNKNOWN is never counted as PASS (exit 1). Invalid scan
@@ -242,8 +286,8 @@ fourgate doctor --contracts path/to/contracts.json --log outcomes.jsonl -- pytho
 The default discovery lifecycle is legacy `2024-11-05`. For an explicitly selected
 native server, add `--protocol-version 2026-07-28` to doctor before `--` and review
 `server.protocol_version` in the scan contract. That mode uses `server/discover`
-and per-request metadata; it does not fall back to initialize. This source change
-is not yet in the PyPI release. See [protocol limits](specs/scan-contract-v1.md).
+and per-request metadata; it does not fall back to initialize. Included in
+`0.4.0b1` on PyPI. See [protocol limits](specs/scan-contract-v1.md).
 
 It never sends `tools/call`, never runs a verifier, never makes a network request, and never creates or modifies a file. It therefore cannot confirm that the read credential is valid or read-only, or that the read-back endpoint is reachable. When a server command is given, the server is started only for `initialize` and `tools/list`; anything the server does on its own at start-up is outside Fourgate's control.
 
@@ -372,11 +416,11 @@ yet.
 
 ## Current limitations
 
+- **Limited beta `0.4.0b1`:** local command-configured **stdio** only; customer CI, complete Desktop UI execution, and production reliability remain unvalidated.
 - Outcome contracts are hand-authored and human-approved; generation is not implemented.
 - Runtime verifiers are local commands. The bundled one, `fourgate.verify_http`, is a generic HTTP GET read-back; the read credential can be sent as a Bearer token, a custom header, or Basic auth; there are no database adapters.
-- Outcome verification adds read-back latency on the protected call. The runtime caps each verifier at 2000 ms and fails open (UNKNOWN) on uncertainty. `verify_http` measured 1.2–1.6 s per call on a Windows laptop, and a first cold call exceeded its budget, so headroom is small on slow networks.
-- Only command-configured local stdio MCP servers are covered (scanner and runtime); no remote MCP transport.
-- No dashboard, alerting product, gateway, retry engine, or automatic compensation.
+- Outcome verification adds read-back latency on the protected call. The runtime caps each verifier at **2000 ms** and fails open (**UNKNOWN**) on uncertainty. UNKNOWN is never PASS. `verify_http` measured 1.2–1.6 s per call on a Windows laptop, and a first cold call exceeded its budget, so headroom is small on slow networks.
+- No remote MCP transport, Fourgate hosted endpoint, telemetry, dashboard, alerting product, gateway, retry engine, or automatic compensation.
 - The older `checker/preflight.py` remains a separate legacy diagnostic. Scanner/doctor have explicit legacy and `2026-07-28` modes tested with local fixtures; that is not universal compatibility. Legacy SDK tests still use the dev-only `mcp==1.9.4` pin.
 
 ## Tests
