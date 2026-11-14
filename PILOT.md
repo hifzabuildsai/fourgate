@@ -3,19 +3,33 @@
 This page is for a team evaluating Fourgate, including whoever reviews it for
 security. It describes what runs, what is stored, and what leaves your
 machines. [`SECURITY.md`](SECURITY.md) has the full data-flow detail.
+Product overview and install: [`README.md`](README.md). Operator routine:
+[`OPERATOR.md`](OPERATOR.md).
+
+**Version: limited beta `0.4.0b1`.** Supported paths are local
+command-configured **stdio** workflows only. Customer CI, complete Desktop UI
+execution, and production reliability remain unvalidated.
+
+```bash
+python -m pip install --pre "fourgate==0.4.0b1"
+python -m fourgate --version
+```
 
 ## The short version
 
 - Fourgate runs **entirely on your machines** (a laptop, a server, or your CI).
-  There is no Fourgate cloud service, account, database or telemetry.
+  There is no Fourgate cloud service, account, database, hosted endpoint or
+  telemetry.
 - Fourgate **never stores your credentials**. You set them as environment
   variables on your side; they are never written to contracts, logs or the
   summary page.
 - Nothing is sent to Fourgate. You decide what, if anything, to share with us,
   and the summary page is built to be shareable.
-- In shadow mode (the pilot default, without the legacy `--baseline` flag),
-  your agent receives **exactly the same bytes** it would without Fourgate. If anything in Fourgate fails, the call
-  passes through unchanged.
+- Independent read-back returns **PASS** / **FAIL** / **UNKNOWN**. In shadow
+  mode (the pilot default, without the legacy `--baseline` flag), your agent
+  receives **exactly the same bytes** it would without Fourgate. Enforce
+  prepends a verdict only on confirmed FAIL. If anything in Fourgate fails,
+  the call fails open as UNKNOWN (never PASS) and passes through unchanged.
 
 ## What runs where
 
@@ -96,12 +110,16 @@ your MCP client back at the original server command, and delete these files.
 
 ## Current requirements and limits
 
-- MCP servers launched as **local stdio** processes. Remote (HTTP) MCP servers
-  are not supported yet.
+- **Limited beta `0.4.0b1`:** MCP servers launched as **local stdio** processes
+  only. Remote (HTTP/SSE) MCP transport is not supported. Customer CI, complete
+  Desktop UI execution, and production reliability remain unvalidated.
 - Read-back is an **HTTPS GET** to an API that can return the written record,
   authenticated with a Bearer token, a custom header (e.g. X-Api-Key), or Basic
-  auth, or with no auth.
-- Each check is capped at 2000 ms. On a Windows laptop the HTTP verifier
-  measured 1.2–1.6 s per call, so add this latency to protected calls.
+  auth, or with no auth. No Fourgate hosted endpoint.
+- Each runtime verifier is capped at **2000 ms**. UNKNOWN fails open and is
+  never PASS. On a Windows laptop the HTTP verifier measured 1.2–1.6 s per call,
+  so add this latency to protected calls; cold starts can exceed a tight budget.
 - Contracts are written by hand and reviewed by a human.
-- Python 3.10+. Tested on Windows and Linux.
+- Python 3.10–3.13. Tested on Windows and Linux.
+- Founder evidence so far includes 4 vendor MCP servers (3 of 4 returned API
+  failures as success without `isError`); see [`README.md`](README.md#results-so-far).
