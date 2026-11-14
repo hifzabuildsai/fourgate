@@ -15,6 +15,9 @@ python -m pip install --pre "fourgate==0.4.0b1"
 python -m fourgate --version
 ```
 
+Second-person disposable scan path (init → doctor → scan → summary):
+[`docs/external-disposable-scan.md`](docs/external-disposable-scan.md).
+
 ## The short version
 
 - Fourgate runs **entirely on your machines** (a laptop, a server, or your CI).

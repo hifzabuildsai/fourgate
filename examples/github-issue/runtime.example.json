@@ -1,0 +1,22 @@
+{
+  "contract_version": 1,
+  "tools": {
+    "issue_write": {
+      "extract": {
+        "lookup_number": {"source": "arguments", "path": "issue_number"},
+        "expected_number": {"source": "arguments", "path": "issue_number"},
+        "title": {"source": "arguments", "path": "title"},
+        "body": {"source": "arguments", "path": "body"},
+        "state": {"source": "arguments", "path": "state"}
+      },
+      "verifier": {
+        "command": ["{python}", "-m", "fourgate.verify_http", "readback.json"],
+        "cwd": ".",
+        "timeout_ms": 2000,
+        "secret_env": ["FOURGATE_GITHUB_READ_TOKEN"]
+      },
+      "allowed_failure_reasons": ["field_mismatch"],
+      "recovery": "stop"
+    }
+  }
+}

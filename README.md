@@ -84,7 +84,9 @@ fourgate summary   # turn outcomes.jsonl into a local HTML page
 
 Operators: [`OPERATOR.md`](OPERATOR.md) (Windows PowerShell routine and
 contracts). Pilots / security review: [`PILOT.md`](PILOT.md) (what runs where,
-what is stored, where data goes).
+what is stored, where data goes). Second-person disposable scan (bash +
+PowerShell): [`docs/external-disposable-scan.md`](docs/external-disposable-scan.md).
+Measurement placeholders: [`docs/measurement-package.md`](docs/measurement-package.md).
 
 ## Results so far
 

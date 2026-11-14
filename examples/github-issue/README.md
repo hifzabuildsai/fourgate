@@ -5,6 +5,18 @@ The predicates and verdict handling already exist in Fourgate. This pack adds
 a reviewed-request template and repeatable local evidence, without a new
 verifier, runtime, adapter, report schema or release.
 
+**Second-person live path:** [EXTERNAL.md](EXTERNAL.md) (secrets by env name,
+doctor → scan → expected PASS/FAIL/UNKNOWN). Product-wide install/init/doctor/scan
+flow: [docs/external-disposable-scan.md](../../docs/external-disposable-scan.md).
+
+Companion files for doctor/guard (copy beside a configured `scan.json`):
+
+- [runtime.example.json](runtime.example.json) — Outcome Guard contract (`timeout_ms` 2000)
+- [readback.example.json](readback.example.json) — copy to `readback.json` next to runtime
+
+`fourgate scan` refuses unreplaced `REPLACE_*` markers (exit 2) so a half-edited
+template cannot launch a live write.
+
 ## Review the request and identity
 
 [scan.example.json](scan.example.json) is an **inert source template**, not an
