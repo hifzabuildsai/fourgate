@@ -23,6 +23,10 @@ py -3 -m pip install --pre "fourgate==0.4.0b1"
 py -3 -m fourgate --version
 ```
 
+Second-person end-to-end path (init → doctor → scan → summary), including bash
+and the GitHub Issue reference pack:
+[`docs/external-disposable-scan.md`](docs/external-disposable-scan.md).
+
 Hard rules, every time:
 
 - Writes go only to **your own disposable/free-tier test accounts**. Email

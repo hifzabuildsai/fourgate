@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import stat
 import subprocess
 import sys
@@ -29,8 +30,47 @@ class RegisteredContractChangedError(ValueError):
     """A registered file no longer matches the pinned object or bytes."""
 
 
+# Unreplaced template markers. load_contract still accepts them so shipped
+# examples stay inspectable; scan() refuses to execute until they are gone.
+_UNCONFIGURED = re.compile(
+    r"(?:REPLACE_WITH_[A-Z0-9_]+|REPLACE WITH [A-Z0-9 -]+|your-mcp-server)",
+    re.ASCII,
+)
+
+
 def _positive_ms(value, ceiling):
     return type(value) is int and 0 < value <= ceiling
+
+
+def find_unconfigured_placeholders(value, path="$"):
+    """Return dotted paths whose string values still look like template markers."""
+    found = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key.startswith("_"):
+                continue
+            found.extend(find_unconfigured_placeholders(item, f"{path}.{key}"))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            found.extend(find_unconfigured_placeholders(item, f"{path}[{index}]"))
+    elif isinstance(value, str) and _UNCONFIGURED.search(value):
+        found.append(path)
+    return found
+
+
+def assert_ready_to_execute(data):
+    """Refuse a live scan while REPLACE_* / template command markers remain."""
+    leftover = find_unconfigured_placeholders({
+        key: data[key] for key in data if not str(key).startswith("_")
+    })
+    if leftover:
+        preview = ", ".join(leftover[:8])
+        more = f" (+{len(leftover) - 8} more)" if len(leftover) > 8 else ""
+        raise ValueError(
+            "scan contract still contains template placeholders "
+            f"({preview}{more}); replace every REPLACE_* / "
+            "REPLACE WITH … / your-mcp-server value before scanning"
+        )
 
 
 def load_contract(path, confirmation, *, expected_sha256=None, expected_file_identity=None):
@@ -233,6 +273,7 @@ def scan(path, confirmation):
 
 def _scan_loaded_contract(data, *, before_call=None):
     """Execute already validated bytes; internal seam for registered workflows."""
+    assert_ready_to_execute(data)
     server = data["server"]
     rows = []
     server_env = os.environ.copy()
